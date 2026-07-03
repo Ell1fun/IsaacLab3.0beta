@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Isaac Lab 机器人任务接入流程</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #1d2733;
+      --muted: #5c6b7a;
+      --line: #d9e2ec;
+      --blue: #2563eb;
+      --green: #0f766e;
+      --orange: #c2410c;
+      --purple: #7c3aed;
+      --code: #0f172a;
+      --code-bg: #eef2f7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      color: var(--text);
+      background: linear-gradient(180deg, #eef5ff 0%, var(--bg) 240px);
+      line-height: 1.65;
+    }
+    header {
+      padding: 42px 28px 26px;
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+    header h1 {
+      margin: 0 0 10px;
+      font-size: 34px;
+      letter-spacing: -0.02em;
+    }
+    header p {
+      margin: 0;
+      max-width: 880px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 22px;
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 28px 56px;
+    }
+    nav {
+      position: sticky;
+      top: 18px;
+      align-self: start;
+      background: rgba(255, 255, 255, 0.88);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+    }
+    nav strong {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    nav a {
+      display: block;
+      padding: 7px 9px;
+      border-radius: 9px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+    }
+    nav a:hover {
+      background: #e8f0ff;
+      color: var(--blue);
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 24px;
+      margin-bottom: 18px;
+      box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06);
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 24px;
+    }
+    h3 {
+      margin: 22px 0 10px;
+      font-size: 18px;
+    }
+    p { margin: 8px 0 12px; }
+    ul, ol { padding-left: 22px; }
+    li { margin: 7px 0; }
+    code {
+      padding: 2px 5px;
+      border-radius: 5px;
+      color: var(--code);
+      background: var(--code-bg);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 0.94em;
+    }
+    pre {
+      overflow: auto;
+      padding: 14px 16px;
+      border-radius: 13px;
+      background: #0b1220;
+      color: #dbeafe;
+      line-height: 1.55;
+      font-size: 13px;
+    }
+    pre code {
+      padding: 0;
+      color: inherit;
+      background: transparent;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      vertical-align: top;
+    }
+    th {
+      background: #f1f5f9;
+      text-align: left;
+    }
+    .content { min-width: 0; }
+    .pill {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 999px;
+      background: #e0ecff;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+    .note {
+      border-left: 4px solid var(--blue);
+      background: #eff6ff;
+      padding: 12px 14px;
+      border-radius: 10px;
+      color: #1e3a8a;
+    }
+    .warn {
+      border-left: 4px solid var(--orange);
+      background: #fff7ed;
+      padding: 12px 14px;
+      border-radius: 10px;
+      color: #7c2d12;
+    }
+    .ok {
+      border-left: 4px solid var(--green);
+      background: #ecfdf5;
+      padding: 12px 14px;
+      border-radius: 10px;
+      color: #134e4a;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin: 18px 0 8px;
+    }
+    .step {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      background: #fbfdff;
+      min-height: 132px;
+    }
+    .step b {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--purple);
+    }
+    .step span {
+      display: block;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .checklist li::marker { color: var(--green); }
+    .small { color: var(--muted); font-size: 14px; }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      nav { position: static; }
+      .flow { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Isaac Lab 机器人任务接入流程</h1>
+    <p>
+      这份文档按你当前的 R11 项目路径梳理：业务方给 assets 后，我们如何检查资产、写
+      <code>isaaclab_assets/robots/seres_r11.py</code>，再写 <code>env_cfg</code>，最后在
+      <code>__init__.py</code> 注册任务并验证。
+    </p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="#big-picture">1. 总体流程</a>
+      <a href="#assets">2. assets 目录应该有什么</a>
+      <a href="#robot-cfg">3. robot py 的目的和内容</a>
+      <a href="#env-cfg">4. env_cfg 的目的和内容</a>
+      <a href="#registration">5. 任务注册</a>
+      <a href="#debug">6. 验证和调试</a>
+      <a href="#r11-current">7. 当前 R11 对照</a>
+      <a href="#checklist">8. 新项目清单</a>
+    </nav>
+
+    <div class="content">
+      <section id="big-picture">
+        <h2>1. 总体流程</h2>
+        <p>
+          你的理解基本正确：通常是先拿到业务方给的资产，然后把机器人资产封装成
+          <code>ArticulationCfg</code>，再在某个任务的 <code>env_cfg</code> 中引用它，最后注册成一个
+          Gymnasium 任务 ID，供训练、回放、teleop 或数据采集脚本使用。
+        </p>
+        <div class="flow">
+          <div class="step">
+            <b>Step 1: 接收和整理资产</b>
+            <span>确认 USD、mesh、贴图、URDF/MJCF、关节/连杆命名、物理参数、初始姿态。</span>
+          </div>
+          <div class="step">
+            <b>Step 2: 写 robot cfg</b>
+            <span>在 <code>isaaclab_assets</code> 里定义机器人如何 spawn、初始状态、执行器参数。</span>
+          </div>
+          <div class="step">
+            <b>Step 3: 写 env_cfg</b>
+            <span>定义任务场景、机器人和物体摆放、action、observation、termination、event。</span>
+          </div>
+          <div class="step">
+            <b>Step 4: 注册和运行</b>
+            <span>在任务包 <code>__init__.py</code> 中注册 ID，然后用脚本创建环境并验证。</span>
+          </div>
+        </div>
+        <div class="note">
+          最重要的分工：<code>robots/xxx.py</code> 只回答“这个机器人在仿真里怎么被加载和驱动”；<code>env_cfg</code>
+          回答“这个机器人要在哪个任务里做什么，以及智能体/teleop 能看到什么、控制什么、什么时候结束”。
+        </div>
+      </section>
+
+      <section id="assets">
+        <h2>2. assets 目录应该有什么</h2>
+        <p>
+          业务方通常不会只给一个 USD。USD 是场景描述入口，但 USD 往往会引用 mesh、材质、贴图或 payload。
+          对一个机器人项目，建议 assets 目录至少整理成下面这些内容。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>类别</th>
+              <th>建议内容</th>
+              <th>为什么需要</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>主资产</td>
+              <td><code>robot.usd</code>、<code>robot.usda</code> 或 <code>robot.usdc</code></td>
+              <td>Isaac Lab 的 <code>UsdFileCfg.usd_path</code> 会指向它，用于在场景中生成机器人。</td>
+            </tr>
+            <tr>
+              <td>几何资源</td>
+              <td><code>meshes/</code> 下的 <code>.obj</code>、<code>.stl</code>、<code>.dae</code>、<code>.fbx</code> 等</td>
+              <td>USD 可能外部引用 mesh；缺失会导致机器人不可见或加载报错。</td>
+            </tr>
+            <tr>
+              <td>材质贴图</td>
+              <td><code>materials/</code>、<code>textures/</code>、<code>.mtl</code>、<code>.png</code>、<code>.jpg</code></td>
+              <td>影响可视化，也能帮助确认连杆方向和装配是否正确。</td>
+            </tr>
+            <tr>
+              <td>源模型</td>
+              <td><code>.urdf</code>、<code>.mjcf</code>、原始 CAD/导出说明</td>
+              <td>后续排查关节轴、link 名、mimic、限位和 IK 时非常有用；Pink IK 这类控制器也常需要 URDF。</td>
+            </tr>
+            <tr>
+              <td>物理参数表</td>
+              <td>关节限位、速度上限、力矩上限、质量、惯量、减速器、摩擦、PD 建议值</td>
+              <td>用于写 <code>ImplicitActuatorCfg</code> 或显式电机模型，避免机器人软、抖、爆炸或动作不真实。</td>
+            </tr>
+            <tr>
+              <td>命名说明</td>
+              <td>joint/link 命名表、末端 link、脚底 link、base link、手指 mimic 关系</td>
+              <td>env_cfg 里 action、observation、termination、contact sensor、IK frame 都依赖这些名字。</td>
+            </tr>
+            <tr>
+              <td>校验资料</td>
+              <td>默认站姿、零位图、业务期望姿态、真实机器人截图或视频</td>
+              <td>用于判断 <code>init_state</code>、朝向、坐标系和关节正方向是否正确。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>推荐目录结构</h3>
+        <pre><code>IsaacLab/
+  assets/
+    seres_r11/
+      r11_0615.usd
+      r11_0615.urdf              # 如果 IK、排查、二次转换需要，建议保留
+      meshes/
+        r11_0615/
+          *.obj
+          *.mtl
+      docs/
+        joint_names.md
+        actuator_limits.xlsx
+        zero_pose.png</code></pre>
+        <div class="warn">
+          如果业务方只给 USD，也要确认 USD 是否已经内嵌或能解析所有依赖。常见问题是 USD 中引用了绝对路径、
+          Windows 路径、Omniverse/Nucleus 路径，换机器后加载失败。
+        </div>
+      </section>
+
+      <section id="robot-cfg">
+        <h2>3. robot py 的目的和内容</h2>
+        <p>
+          <code>source/isaaclab_assets/isaaclab_assets/robots/seres_r11.py</code> 的核心目的是定义机器人资产配置，
+          也就是一个或多个 <code>ArticulationCfg</code>。它不是任务配置，也不关心 pick/place、行走、teleop
+          这些业务逻辑；它只关心“机器人本体如何在仿真里稳定、可控、可复用”。
+        </p>
+
+        <h3>robot py 应该写什么</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>模块</th>
+              <th>你要写的内容</th>
+              <th>R11 示例</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>路径常量</td>
+              <td>资产根目录、USD 路径、必要时 URDF/mesh 路径。</td>
+              <td><code>ISAACLAB_ASSETS_DIR</code>、<code>R11_USD_PATH</code></td>
+            </tr>
+            <tr>
+              <td>命名分组</td>
+              <td>腿、脚、腰、臂、头、手、末端、接触 link 等 joint/link 名或正则。</td>
+              <td><code>LEG_JOINT_NAMES</code>、<code>ARM_JOINT_NAMES</code>、<code>FEET_LINK_NAMES</code></td>
+            </tr>
+            <tr>
+              <td>物理/执行器常量</td>
+              <td>力矩上限、速度上限、刚度、阻尼、armature、friction 等。</td>
+              <td><code>EFFORT_LIMIT_*</code>、<code>STIFFNESS_*</code>、<code>DAMPING_*</code></td>
+            </tr>
+            <tr>
+              <td><code>spawn</code></td>
+              <td>如何从 USD 生成机器人，以及刚体、关节根、自碰撞、contact sensor 等属性。</td>
+              <td><code>sim_utils.UsdFileCfg(...)</code></td>
+            </tr>
+            <tr>
+              <td><code>init_state</code></td>
+              <td>默认根位置、根姿态、关节初始位置、关节初始速度。</td>
+              <td><code>ArticulationCfg.InitialStateCfg(...)</code></td>
+            </tr>
+            <tr>
+              <td><code>actuators</code></td>
+              <td>按关节组定义执行器模型、被控制关节、力矩/速度限制、PD 参数。</td>
+              <td><code>legs</code>、<code>feet</code>、<code>waist</code>、<code>arms</code>、<code>hands</code></td>
+            </tr>
+            <tr>
+              <td>派生配置</td>
+              <td>在基础机器人上 copy/replace 出固定底座、高 PD、无手版本等变体。</td>
+              <td><code>R11_A2_HIGH_PD_CFG</code></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>最小骨架</h3>
+        <pre><code>import os
+
+import isaaclab.sim as sim_utils
+from isaaclab.actuators import ImplicitActuatorCfg
+from isaaclab.assets.articulation import ArticulationCfg
+
+ASSET_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../assets/my_robot"))
+USD_PATH = os.path.join(ASSET_DIR, "my_robot.usd")
+
+MY_ROBOT_CFG = ArticulationCfg(
+    spawn=sim_utils.UsdFileCfg(
+        usd_path=USD_PATH,
+        activate_contact_sensors=True,
+        rigid_props=sim_utils.RigidBodyPropertiesCfg(
+            disable_gravity=False,
+            linear_damping=0.0,
+            angular_damping=0.0,
+        ),
+        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+            enabled_self_collisions=True,
+            solver_position_iteration_count=8,
+            solver_velocity_iteration_count=4,
+        ),
+    ),
+    init_state=ArticulationCfg.InitialStateCfg(
+        pos=(0.0, 0.0, 1.0),
+        joint_pos={".*": 0.0},
+        joint_vel={".*": 0.0},
+    ),
+    actuators={
+        "body": ImplicitActuatorCfg(
+            joint_names_expr=[".*"],
+            effort_limit_sim=100.0,
+            velocity_limit_sim=10.0,
+            stiffness=100.0,
+            damping=10.0,
+        ),
+    },
+)</code></pre>
+
+        <h3>robot py 不应该承担什么</h3>
+        <ul>
+          <li>不应该写任务成功条件，例如物体是否放到目标区域。</li>
+          <li>不应该写 policy observation 细节，例如给算法拼哪些状态。</li>
+          <li>不应该写场景桌子、目标物、灯光和随机化，除非这些是机器人本体的一部分。</li>
+          <li>不应该绑定某一个训练算法配置，例如 RSL-RL、robomimic、skrl 的超参数。</li>
+        </ul>
+      </section>
+
+      <section id="env-cfg">
+        <h2>4. env_cfg 的目的和内容</h2>
+        <p>
+          <code>env_cfg</code> 是任务配置。它把机器人、物体、场景、控制方式、观测、终止条件和 reset 逻辑组合起来，
+          形成一个可被 <code>ManagerBasedRLEnv</code> 创建的环境。
+        </p>
+
+        <h3>env_cfg 常见组成</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>配置类</th>
+              <th>作用</th>
+              <th>通常写什么</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>SceneCfg</code></td>
+              <td>定义世界里有什么。</td>
+              <td>机器人、桌子、目标物、地面、灯光、相机、传感器、每个 env 的 spacing。</td>
+            </tr>
+            <tr>
+              <td><code>ActionsCfg</code></td>
+              <td>定义外部输入如何作用到机器人。</td>
+              <td>关节位置控制、关节速度控制、IK action、手爪 action、teleop action。</td>
+            </tr>
+            <tr>
+              <td><code>ObservationsCfg</code></td>
+              <td>定义 policy 或 recorder 能看到什么。</td>
+              <td>关节状态、根状态、物体状态、末端位姿、相机图像、上一帧 action。</td>
+            </tr>
+            <tr>
+              <td><code>RewardsCfg</code></td>
+              <td>RL 训练时定义奖励。</td>
+              <td>到目标距离、姿态误差、动作平滑、能耗、成功奖励。纯 teleop/数据采集可为 <code>None</code>。</td>
+            </tr>
+            <tr>
+              <td><code>TerminationsCfg</code></td>
+              <td>定义 episode 什么时候结束。</td>
+              <td>超时、失败掉落、机器人摔倒、任务成功。</td>
+            </tr>
+            <tr>
+              <td><code>EventCfg</code></td>
+              <td>定义 reset 或运行过程事件。</td>
+              <td>重置机器人、随机化物体位姿、随机化材质/质量/摩擦、重置 action target。</td>
+            </tr>
+            <tr>
+              <td><code>EnvCfg</code></td>
+              <td>把上面所有 manager 拼起来。</td>
+              <td><code>scene</code>、<code>actions</code>、<code>observations</code>、<code>terminations</code>、<code>events</code>、仿真频率。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>R11 pick-place 里的对应关系</h3>
+        <ul>
+          <li><code>ObjectTableSceneCfg</code>：放置 packing table、object、R11 robot、ground、light。</li>
+          <li><code>ActionsCfg</code>：使用 <code>PinkInverseKinematicsActionCfg</code> 控制双腕末端和手部关节。</li>
+          <li><code>ObservationsCfg</code>：记录 action、机器人关节/root、物体位姿、左右末端位姿、手/头关节状态。</li>
+          <li><code>TerminationsCfg</code>：包括 <code>time_out</code>、物体掉落、pick-place 成功。</li>
+          <li><code>EventCfg</code>：reset 场景、轻微随机化 object 位姿。</li>
+          <li><code>PickPlaceR11EnvCfg</code>：设置 <code>decimation</code>、<code>episode_length_s</code>、<code>sim.dt</code>、PhysX buffer、XR/teleop pipeline。</li>
+        </ul>
+
+        <h3>写 env_cfg 的推荐顺序</h3>
+        <ol>
+          <li>先只写 <code>SceneCfg</code>，把机器人和地面 spawn 出来，确认不爆炸、不丢 mesh。</li>
+          <li>加入任务物体、桌子、目标区域，确认坐标系和高度正确。</li>
+          <li>加入最简单的 <code>ActionsCfg</code>，先用 joint position action 或固定 action 验证机器人能动。</li>
+          <li>再切到业务需要的 action，例如 IK、motion controller、hand tracking。</li>
+          <li>加入 <code>ObservationsCfg</code>，保证维度稳定，命名和 link/joint 匹配。</li>
+          <li>加入 <code>TerminationsCfg</code> 和 <code>EventCfg</code>，让 episode 能正确 reset、成功、失败。</li>
+          <li>最后补 rewards、curriculum、domain randomization 或数据采集配置。</li>
+        </ol>
+
+        <div class="note">
+          如果你的目标是 teleop 或模仿学习采集数据，<code>rewards = None</code> 是可以的；如果目标是强化学习训练，
+          就需要补 <code>RewardsCfg</code> 和算法侧 agent 配置。
+        </div>
+      </section>
+
+      <section id="registration">
+        <h2>5. 任务注册</h2>
+        <p>
+          写完 <code>env_cfg</code> 后，通常需要在任务目录的 <code>__init__.py</code> 中通过
+          <code>gym.register</code> 注册任务。注册的目的，是把“环境 ID”映射到“环境类”和“配置类”。
+        </p>
+
+        <h3>当前项目示例</h3>
+        <pre><code>gym.register(
+    id="Isaac-PickPlace-R11-Abs-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    kwargs={
+        "env_cfg_entry_point": (
+            "isaaclab_tasks.manager_based.manipulation.pick_place."
+            "pickplace_seres_r11_env_cfg:PickPlaceR11EnvCfg"
+        ),
+        "robomimic_bc_cfg_entry_point": "isaaclab_tasks.manager_based.manipulation.pick_place.agents:robomimic/bc_rnn_low_dim.json",
+    },
+    disable_env_checker=True,
+)</code></pre>
+
+        <h3>注册字段怎么理解</h3>
+        <ul>
+          <li><code>id</code>：外部运行时使用的任务名，例如训练脚本里的 <code>--task Isaac-PickPlace-R11-Abs-v0</code>。</li>
+          <li><code>entry_point</code>：要实例化的环境类。ManagerBased 任务通常是 <code>isaaclab.envs:ManagerBasedRLEnv</code>。</li>
+          <li><code>env_cfg_entry_point</code>：指向你写的配置类，格式是 <code>python.module:ClassName</code>。</li>
+          <li><code>*_cfg_entry_point</code>：可选，给训练、模仿学习或其他工具加载算法配置。</li>
+          <li><code>disable_env_checker</code>：Isaac Lab 任务通常设为 <code>True</code>，避免 Gym 默认检查器误判复杂空间。</li>
+        </ul>
+
+        <div class="warn">
+          只写 <code>env_cfg</code> 但不注册时，脚本无法通过任务 ID 找到它。注册文件所在包也必须能被导入；
+          如果你新建了更深层目录，要确认上层 <code>__init__.py</code> 或任务发现机制会导入到这个注册模块。
+        </div>
+      </section>
+
+      <section id="debug">
+        <h2>6. 验证和调试</h2>
+        <p>
+          不建议一上来就训练。新机器人接入应该先做资产级验证，再做环境级验证，最后做任务级验证。
+        </p>
+
+        <h3>建议验证顺序</h3>
+        <ol>
+          <li><strong>USD 单独打开</strong>：确认 mesh、材质、关节层级、Articulation Root、碰撞体和质量惯量。</li>
+          <li><strong>robot cfg spawn</strong>：写最小脚本或复用 demo，只 spawn R11，按 play 看是否掉落、爆炸、姿态正确。</li>
+          <li><strong>关节名匹配</strong>：确认 <code>joint_names_expr</code> 能匹配到预期 DOF，没有漏控或重复控制。</li>
+          <li><strong>执行器参数</strong>：从小刚度/阻尼开始，逐步调到业务参数，观察抖动、穿透、跟踪误差。</li>
+          <li><strong>env_cfg 初始化</strong>：只跑 reset 和 zero/random agent，确认 observation/action 维度稳定。</li>
+          <li><strong>任务逻辑</strong>：检查 success/failure 是否符合业务目标，reset 是否把物体和机器人放回合理范围。</li>
+          <li><strong>teleop/训练</strong>：最后接 XR、motion controller、RL 或 imitation learning。</li>
+        </ol>
+
+        <h3>常用命令</h3>
+        <pre><code># 列出可注册环境，确认任务 ID 是否出现
+./isaaclab.sh -p scripts/environments/list_envs.py
+
+# 用随机动作跑环境，先看是否能创建和 step
+./isaaclab.sh -p scripts/environments/random_agent.py --task Isaac-PickPlace-R11-Abs-v0 --num_envs 1
+
+# 用零动作跑环境，更容易看初始姿态和稳定性
+./isaaclab.sh -p scripts/environments/zero_agent.py --task Isaac-PickPlace-R11-Abs-v0 --num_envs 1</code></pre>
+
+        <h3>常见问题定位</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>现象</th>
+              <th>优先检查</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>机器人不可见或 mesh 丢失</td>
+              <td>USD 外部引用路径、<code>meshes/</code> 是否完整、相对路径是否正确。</td>
+            </tr>
+            <tr>
+              <td>一按 play 就爆炸</td>
+              <td>碰撞体重叠、自碰撞、质量惯量异常、初始姿态穿地、solver iteration 太低。</td>
+            </tr>
+            <tr>
+              <td>机器人软或跟踪差</td>
+              <td><code>stiffness</code>、<code>damping</code>、<code>armature</code>、<code>effort_limit_sim</code> 是否合理。</td>
+            </tr>
+            <tr>
+              <td>某些关节不动</td>
+              <td><code>joint_names_expr</code> 是否匹配、USD drive 是否存在、关节是否 fixed/mimic、action 是否覆盖。</td>
+            </tr>
+            <tr>
+              <td>IK 方向不对</td>
+              <td>base link、end-effector link、URDF 坐标系、USD/URDF 是否一致、四元数顺序。</td>
+            </tr>
+            <tr>
+              <td>任务 ID 找不到</td>
+              <td><code>gym.register</code> 是否执行、模块是否被导入、<code>env_cfg_entry_point</code> 路径是否写错。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="r11-current">
+        <h2>7. 当前 R11 对照</h2>
+        <p>
+          结合当前仓库，R11 已经走到了“资产、robot cfg、env_cfg、注册任务”都存在的阶段。
+          下面是你现在可以重点阅读的文件和它们的作用。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>文件</th>
+              <th>作用</th>
+              <th>建议阅读重点</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>assets/seres_r11/r11_0615.usd</code></td>
+              <td>R11 主 USD。</td>
+              <td>Articulation Root、joint/link 名、碰撞体、自碰撞、mesh 引用。</td>
+            </tr>
+            <tr>
+              <td><code>assets/seres_r11/meshes/r11_0615/</code></td>
+              <td>R11 USD 依赖的 OBJ/MTL mesh 资源。</td>
+              <td>资源是否完整，是否有绝对路径依赖。</td>
+            </tr>
+            <tr>
+              <td><code>source/isaaclab_assets/isaaclab_assets/robots/seres_r11.py</code></td>
+              <td>R11 机器人本体配置。</td>
+              <td>joint 分组、<code>R11_A2_32DOF_REAL</code>、<code>R11_A2_HIGH_PD_CFG</code>、执行器参数。</td>
+            </tr>
+            <tr>
+              <td><code>source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/pickplace_seres_r11_env_cfg.py</code></td>
+              <td>R11 pick-place 任务配置。</td>
+              <td><code>ObjectTableSceneCfg</code>、<code>ActionsCfg</code>、<code>ObservationsCfg</code>、<code>TerminationsCfg</code>、teleop pipeline。</td>
+            </tr>
+            <tr>
+              <td><code>source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/mdp/</code></td>
+              <td>任务专属 observation、termination、event 函数。</td>
+              <td>成功条件、物体观测、末端位姿观测、reset 逻辑。</td>
+            </tr>
+            <tr>
+              <td><code>source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/__init__.py</code></td>
+              <td>注册 pick-place 任务 ID。</td>
+              <td><code>Isaac-PickPlace-R11-Abs-v0</code> 和 <code>Isaac-PickPlace-R11-MotionController-Abs-v0</code>。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="ok">
+          你下一步学习时，可以沿着这条链路读代码：先读 <code>seres_r11.py</code> 的
+          <code>R11_A2_32DOF_REAL</code>，再跳到 <code>ObjectTableSceneCfg.robot</code> 看它如何被 replace 到任务场景，
+          然后读 <code>ActionsCfg</code> 看外部 action 如何变成 R11 关节目标，最后读注册文件看任务 ID 如何暴露给脚本。
+        </div>
+      </section>
+
+      <section id="checklist">
+        <h2>8. 新项目清单</h2>
+        <p>
+          如果以后你从 0 接一个新机器人或新任务，可以按这个 checklist 推进。
+        </p>
+
+        <h3>资产接收 checklist</h3>
+        <ul class="checklist">
+          <li>拿到主 USD，并确认能在 Isaac Sim/Kit 中打开。</li>
+          <li>拿到所有 mesh、材质、贴图，且路径可在当前仓库中解析。</li>
+          <li>拿到 URDF/MJCF 或至少 joint/link 命名表。</li>
+          <li>拿到默认站姿、base link、末端 link、脚底 link、手爪 link。</li>
+          <li>拿到关节限位、速度上限、力矩上限、质量惯量、PD 或电机参数。</li>
+          <li>确认 floating base 还是 fixed base，是否需要自碰撞和 contact sensor。</li>
+        </ul>
+
+        <h3>robot cfg checklist</h3>
+        <ul class="checklist">
+          <li>定义资产路径常量，避免在多个 env_cfg 中重复写路径。</li>
+          <li>定义 joint/link 分组，尤其是 action 会控制的关节和 observation 会读取的 link。</li>
+          <li>定义 <code>ArticulationCfg.spawn</code>，包含 USD、刚体属性、articulation 属性。</li>
+          <li>定义 <code>init_state</code>，保证机器人 reset 后不穿地、不自碰撞。</li>
+          <li>定义 <code>actuators</code>，确保所有需要控制的 DOF 都被覆盖。</li>
+          <li>为不同任务派生变体，例如固定底座、高 PD、禁用手部、只控制上半身。</li>
+        </ul>
+
+        <h3>env_cfg checklist</h3>
+        <ul class="checklist">
+          <li>Scene: 机器人、任务物体、桌子/地面/灯光、相机/传感器。</li>
+          <li>Actions: action 维度、控制关节、缩放、IK frame、手爪映射。</li>
+          <li>Observations: policy 需要的状态，是否 concatenate，是否加噪声。</li>
+          <li>Rewards: RL 训练才需要；teleop/模仿学习可以暂时为空。</li>
+          <li>Terminations: 超时、失败、成功。</li>
+          <li>Events: reset、随机化、初始目标同步。</li>
+          <li>Env post init: <code>decimation</code>、<code>sim.dt</code>、<code>episode_length_s</code>、PhysX buffer。</li>
+        </ul>
+
+        <h3>注册和验证 checklist</h3>
+        <ul class="checklist">
+          <li>在任务目录 <code>__init__.py</code> 添加 <code>gym.register</code>。</li>
+          <li>确认 <code>env_cfg_entry_point</code> 的模块路径和类名正确。</li>
+          <li>运行 <code>list_envs.py</code>，确认任务 ID 能被发现。</li>
+          <li>运行 <code>zero_agent.py</code>，确认 reset 和 step 不报错。</li>
+          <li>运行 <code>random_agent.py</code> 或 teleop，确认 action 能控制预期关节。</li>
+          <li>再开始训练、采集数据或接业务 pipeline。</li>
+        </ul>
+
+        <p class="small">
+          文档创建位置：<code>IsaacLab/my_docs/isaaclab_robot_task_flow.html</code>。在文件管理器中双击即可本地打开。
+        </p>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
