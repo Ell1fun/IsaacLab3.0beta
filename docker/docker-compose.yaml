@@ -46,6 +46,12 @@ x-default-isaac-lab-volumes: &default-isaac-lab-volumes
     source: ../source
     target: ${DOCKER_ISAACLAB_PATH}/source
   - type: bind
+    source: ../assets
+    target: ${DOCKER_ISAACLAB_PATH}/assets
+  - type: bind
+    source: ../skills
+    target: ${DOCKER_ISAACLAB_PATH}/skills
+  - type: bind
     source: ../scripts
     target: ${DOCKER_ISAACLAB_PATH}/scripts
   - type: bind
@@ -98,8 +104,8 @@ services:
         - ISAACSIM_ROOT_PATH_ARG=${DOCKER_ISAACSIM_ROOT_PATH}
         - ISAACLAB_PATH_ARG=${DOCKER_ISAACLAB_PATH}
         - DOCKER_USER_HOME_ARG=${DOCKER_USER_HOME}
-    image: isaac-lab-base${DOCKER_NAME_SUFFIX-}
-    container_name: isaac-lab-base${DOCKER_NAME_SUFFIX-}
+    image: isaac-lab-3.0-beta
+    container_name: isaac-lab-3.0-beta
     environment: *default-isaac-lab-environment
     volumes: *default-isaac-lab-volumes
     network_mode: host

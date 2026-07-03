@@ -48,6 +48,26 @@ gym.register(
 )
 
 gym.register(
+    id="Isaac-PickPlace-R11-Abs-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.pickplace_seres_r11_env_cfg:PickPlaceR11EnvCfg",
+        "robomimic_bc_cfg_entry_point": f"{agents.__name__}:robomimic/bc_rnn_low_dim.json",
+    },
+    disable_env_checker=True,
+)
+
+gym.register(
+    id="Isaac-PickPlace-R11-MotionController-Abs-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.pickplace_seres_r11_env_cfg:PickPlaceR11MotionControllerEnvCfg",
+        "robomimic_bc_cfg_entry_point": f"{agents.__name__}:robomimic/bc_rnn_low_dim.json",
+    },
+    disable_env_checker=True,
+)
+
+gym.register(
     id="Isaac-PickPlace-G1-InspireFTP-Abs-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     kwargs={

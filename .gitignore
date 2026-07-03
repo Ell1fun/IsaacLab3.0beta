@@ -88,3 +88,6 @@ _build
 
 # Superpowers (Claude Code plugin artifacts)
 docs/superpowers/
+
+# Local assets (keep large/local files out of git)
+/assets/

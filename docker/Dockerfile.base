@@ -177,6 +177,9 @@ RUN set -o pipefail \
  && mkdir -p ${dirs} \
  && chown -R isaaclab:isaaclab ${dirs}
 
+RUN mkdir -p /var/cache/hub \
+ && chown -R isaaclab:isaaclab /var/cache/hub
+
 USER isaaclab
 
 # make working directory as the Isaac Lab directory
