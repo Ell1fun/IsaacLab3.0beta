@@ -84,6 +84,55 @@ AI 追问用户
 Spec 通过 gate，进入 Generator</code></pre>
       </section>
 
+      <section>
+        <h2>用户 Prompt 应该长什么样</h2>
+        <p>
+          用户不需要自己写 YAML。理想体验是用户用自然语言描述任务，Spec Builder 根据 schema 和 prompt 规则生成 spec 草稿。
+        </p>
+        <pre><code>我希望用宇树的机器人做一个抓取方向盘的遥操任务。</code></pre>
+        <p>这句话会被解析成几个关键信息：</p>
+        <ul>
+          <li><code>宇树</code>：优先匹配 <code>unitree_g1_inspire_ftp</code>，因为它是当前仓库里最接近 VR/hand tracking pick_place 的 Unitree 样例。</li>
+          <li><code>方向盘</code>：匹配 <code>object.preset: steering_wheel</code>。</li>
+          <li><code>遥操</code>：匹配 <code>control.teleop.enabled: true</code>，默认走 <code>openxr_hand_tracking</code>。</li>
+          <li><code>抓取</code>：匹配 <code>manager_based/manipulation/pick_place</code>。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>当前支持的物体预设</h2>
+        <p>
+          对 pick_place 任务来说，抓取物体也需要约束成 enum。这样模型不会随便编一个不存在的 USD 路径。
+        </p>
+        <table>
+          <thead><tr><th>object.preset</th><th>来源</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>steering_wheel</code></td><td>R11 / GR1T2 pick_place 样例</td><td>方向盘，当前最适合“抓取方向盘遥操任务”的默认物体。</td></tr>
+            <tr><td><code>bottled_water_c01</code></td><td>R11 tri 样例引用</td><td>瓶装水，可用于简单抓取/搬运。</td></tr>
+            <tr><td><code>factory_m16_nut_green</code></td><td>nut pour 任务资产</td><td>绿色 M16 螺母，适合螺母/投放类任务。</td></tr>
+            <tr><td><code>exhaust_pipe</code></td><td>GR1T2 exhaust pipe 任务</td><td>排气管，需要参考 exhaustpipe 任务资产。</td></tr>
+          </tbody>
+        </table>
+        <div class="note">
+          如果用户说的物体不在 enum 里，当前 skill 不应编造路径；应追问用户是否改用已有 preset，或进入后续“用户给 USD 生成资产”的独立 skill。
+        </div>
+      </section>
+
+      <section>
+        <h2>自动命名与注册区分</h2>
+        <p>
+          自动生成的 env_cfg 和注册任务必须和仓库已有手写任务明显区分，避免误覆盖、误复用。
+        </p>
+        <table>
+          <thead><tr><th>项目</th><th>规则</th><th>例子</th></tr></thead>
+          <tbody>
+            <tr><td>文件名</td><td>使用 <code>auto_pickplace_..._env_cfg.py</code></td><td><code>auto_pickplace_unitree_g1_steering_wheel_teleop_env_cfg.py</code></td></tr>
+            <tr><td>EnvCfg 类名</td><td>使用 <code>AutoPickPlace...EnvCfg</code></td><td><code>AutoPickPlaceUnitreeG1SteeringWheelTeleopEnvCfg</code></td></tr>
+            <tr><td>Gym ID</td><td>使用 <code>Isaac-Auto-PickPlace-...</code></td><td><code>Isaac-Auto-PickPlace-UnitreeG1-SteeringWheel-Teleop-v0</code></td></tr>
+          </tbody>
+        </table>
+      </section>
+
     </div>
   </main>
 </body>

@@ -9,7 +9,7 @@
 <body>
   <header>
     <h1>AI Agent 生成 env_cfg：Skill 文件</h1>
-    <p>梳理 env_cfg_skills 中每类文件的职责与后续应补齐的材料。</p>
+    <p>梳理 env_cfg_skills 中每类文件的职责：完整 skill 不只是 schema，还包括 prompts、checklist、examples 和 orchestrator workflow。</p>
   </header>
 
   <main>
@@ -42,23 +42,29 @@
         <table>
           <thead><tr><th>文件</th><th>作用</th></tr></thead>
           <tbody>
-            <tr><td><code>env_cfg_skills/schemas/pick_place_vr_spec.schema.yml</code></td><td>PickPlaceVRSpec 的结构约束。</td></tr>
-            <tr><td><code>env_cfg_skills/prompts/env_cfg_generator.md</code></td><td>当前已有的 env_cfg 生成 prompt 雏形。</td></tr>
-            <tr><td><code>env_cfg_skills/orchestrator.py</code></td><td>最小 orchestrator：路由、模板、校验、generate 占位。</td></tr>
+            <tr><td><code>env_cfg_skills/schemas/pick_place_vr_spec.schema.yml</code></td><td>PickPlaceVRSpec 的结构约束，负责字段、类型、必填/可选和条件必填。</td></tr>
+            <tr><td><code>env_cfg_skills/prompts/pick_place_vr_spec_builder.md</code></td><td>Spec Builder prompt：规定自然语言如何补齐成 spec。</td></tr>
+            <tr><td><code>env_cfg_skills/prompts/pick_place_vr_generator.md</code></td><td>Generator prompt：规定通过校验的 spec 如何生成 env_cfg 和注册任务。</td></tr>
+            <tr><td><code>env_cfg_skills/checklists/post_generation_validation.md</code></td><td>生成后验收清单，检查路径、import、joint/link、action layout、注册。</td></tr>
+            <tr><td><code>env_cfg_skills/examples/...</code></td><td>R11 / G1 示例 spec，用于验证 schema 表达能力并给模型参考。</td></tr>
+            <tr><td><code>env_cfg_skills/orchestrator.py</code></td><td>编排器：执行 chat/generate 两阶段 workflow，做 schema gate 和可选写文件。</td></tr>
             <tr><td><code>env_cfg_agent_process/schemas/pick_place_vr_spec.schema.yml</code></td><td>schema 的知识库备份/学习版本。</td></tr>
           </tbody>
         </table>
       </section>
 
       <section>
-        <h2>建议补齐的执行材料</h2>
-        <ul>
-          <li><code>prompts/pick_place_vr_spec_builder.md</code>：规定如何把自然语言变成 spec，并如何做 gap analysis。</li>
-          <li><code>prompts/pick_place_vr_generator.md</code>：规定如何从已校验 spec 生成 env_cfg 和注册改动。</li>
-          <li><code>checklists/post_generation_validation.md</code>：生成后校验清单。</li>
-          <li><code>examples/r11_pick_place_hand_tracking/input.yml</code>：R11 示例 spec。</li>
-          <li><code>examples/g1_pick_place_hand_tracking/input.yml</code>：G1 示例 spec。</li>
-        </ul>
+        <h2>完整 skill 的职责拆分</h2>
+        <table>
+          <thead><tr><th>材料</th><th>负责什么</th><th>不负责什么</th></tr></thead>
+          <tbody>
+            <tr><td><b>Schema</b></td><td>定义 spec 字段结构、类型、枚举、必填/可选和条件必填。</td><td>不告诉 AI 怎么写代码。</td></tr>
+            <tr><td><b>Spec Builder Prompt</b></td><td>把用户自然语言整理成 spec，并根据校验错误做 gap analysis。</td><td>不生成 env_cfg。</td></tr>
+            <tr><td><b>Generator Prompt</b></td><td>根据已通过 schema gate 的 spec 生成 env_cfg、注册任务和启动命令。</td><td>不跳过 schema gate。</td></tr>
+            <tr><td><b>Checklist</b></td><td>生成后验收路径、import、joint/link、action layout、teleop pipeline、注册。</td><td>不代替真实运行测试。</td></tr>
+            <tr><td><b>Examples</b></td><td>提供 R11/G1 这类已知任务的输入样例和期望输出摘要。</td><td>不保证新机器人可以直接复用。</td></tr>
+          </tbody>
+        </table>
       </section>
 
       <section>

@@ -29,21 +29,22 @@
         <h2>当前状态</h2>
         <ul>
           <li>已经有 PickPlaceVRSpec schema。</li>
-          <li>已经有最小 orchestrator：route / template / validate / generate。</li>
+          <li>已经有 Spec Builder prompt 和 Generator prompt。</li>
+          <li>已经有 post-generation checklist。</li>
+          <li>已经有 R11 / G1 Inspire Hand 示例 spec。</li>
+          <li>已经有 orchestrator：route / template / validate / generate / chat。</li>
           <li>已经明确第一阶段支持 IsaacLab 仓库内封装好的人形机器人预设。</li>
-          <li>已经明确成熟形态需要 AI API、会话状态、schema gate、post validation gate。</li>
         </ul>
       </section>
 
       <section>
         <h2>下一步优先级</h2>
         <ol>
-          <li>补 <code>pick_place_vr_spec_builder.md</code>：定义自然语言到 spec 的补齐规则。</li>
-          <li>补 <code>pick_place_vr_generator.md</code>：定义 spec 到 env_cfg 的生成规则。</li>
-          <li>补 <code>post_generation_validation.md</code>：定义生成后的检查清单。</li>
-          <li>补 R11/G1 examples：用真实任务反推 schema 是否够用。</li>
-          <li>把 orchestrator 的 API 分支从 raw 输出升级为：解析 spec → schema 校验 → 追问循环。</li>
-          <li>再实现 env_cfg 写文件、注册 task、运行静态检查。</li>
+          <li>用 R11/G1 现有 env_cfg 继续校准 examples 里的 joint/link/hand joint 顺序。</li>
+          <li>把 Spec Builder 的追问从“输出 questions”升级为真正的多轮问答状态管理。</li>
+          <li>把 Generator 输出接入 post-generation checklist 的自动检查。</li>
+          <li>实现 task 注册文件的安全 patch，而不是整文件覆盖。</li>
+          <li>加入一次真实 dry-run：读取 example spec → 生成 env_cfg payload → checklist 报告。</li>
         </ol>
       </section>
 

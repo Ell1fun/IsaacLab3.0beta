@@ -15,7 +15,7 @@ properties:
   spec_version:
     type: string
     enum:
-      - 0.1
+      - "0.1"
   task:
     type: object
     additionalProperties: false
@@ -29,6 +29,14 @@ properties:
       variant:
         type: string
         minLength: 1
+      generated_file_stem:
+        type: string
+        pattern: ^auto_pickplace_[a-z0-9_]+_env_cfg$
+        description: "自动生成 env_cfg 文件名主干，例如 auto_pickplace_unitree_g1_steering_wheel_teleop_env_cfg"
+      gym_id:
+        type: string
+        pattern: ^Isaac-Auto-PickPlace-[A-Za-z0-9]+-[A-Za-z0-9]+-Teleop-v[0-9]+$
+        description: "自动注册的 Gym task id，例如 Isaac-Auto-PickPlace-UnitreeG1-SteeringWheel-Teleop-v0"
       notes:
         type: string
   robot:
@@ -171,12 +179,21 @@ properties:
     type: object
     additionalProperties: false
     required:
-      - usd_path
+      - preset
       - pose
     properties:
+      preset:
+        type: string
+        enum:
+          - steering_wheel
+          - bottled_water_c01
+          - factory_m16_nut_green
+          - exhaust_pipe
+        description: "当前仓库 pick_place/相关 mimic 任务里已有或已引用的可抓取物体预设。"
       usd_path:
         type: string
         minLength: 1
+        description: "可由 object.preset 推导；需要覆盖时显式填写。"
       pose:
         $ref: "#/$defs/pose7"
       scale:

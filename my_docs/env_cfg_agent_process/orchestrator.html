@@ -51,13 +51,78 @@
             <tr><td><code>route</code></td><td>根据用户自然语言选择 skill，并返回 schema/prompt 路径。</td></tr>
             <tr><td><code>template</code></td><td>输出一个 starter spec 模板。</td></tr>
             <tr><td><code>validate</code></td><td>用 schema 校验一个 spec 文件。</td></tr>
-            <tr><td><code>generate</code></td><td>演示 spec builder → schema gate 的入口；默认不调用 API，<code>--enable_api</code> 才尝试调用。</td></tr>
+            <tr><td><code>generate</code></td><td>执行两个 workflow：先补齐 spec 并通过 schema gate，再根据 spec 生成 env_cfg/注册任务 payload。</td></tr>
+            <tr><td><code>chat</code></td><td>交互式本地 demo：用户启动一次 orchestrator 后，在命令行里连续输入需求和补充信息。</td></tr>
           </tbody>
         </table>
         <pre><code>python my_docs/env_cfg_skills/orchestrator.py route "帮我做一个 pick_place VR teleop env_cfg"
 python my_docs/env_cfg_skills/orchestrator.py template --skill pick_place_vr --format yml
 python my_docs/env_cfg_skills/orchestrator.py validate --skill pick_place_vr --spec /path/to/spec.yml
-python my_docs/env_cfg_skills/orchestrator.py generate "帮我做一个 pick_place VR teleop env_cfg"</code></pre>
+python my_docs/env_cfg_skills/orchestrator.py generate "帮我做一个 pick_place VR teleop env_cfg"
+python my_docs/env_cfg_skills/orchestrator.py chat</code></pre>
+      </section>
+
+      <section>
+        <h2>推荐 Demo 入口：chat</h2>
+        <p>
+          如果目标是给用户演示，推荐用 <code>chat</code>，而不是要求用户每次都输入 <code>python + 脚本 + 命令 + prompt</code>。
+          用户只需要启动一次 orchestrator，然后在命令行里像聊天一样输入需求。
+        </p>
+        <pre><code>python my_docs/env_cfg_skills/orchestrator.py chat
+
+你&gt; 帮我做一个 Unitree G1 Inspire Hand 的 pick_place VR teleop env_cfg
+已路由到 skill: pick_place_vr
+...输出 spec builder / generator 结果...
+
+你&gt; /quit</code></pre>
+        <div class="note">
+          当前建议先把 <code>chat</code> 和 orchestrator 放在同一个文件里，方便本地 demo 和调试。
+          后续如果接 Chat UI、IDE 插件或服务端，再把 chat 入口拆成独立前端/服务入口，核心 workflow 仍复用 orchestrator。
+        </div>
+      </section>
+
+      <section>
+        <h2>模型配置：YAML / JSON</h2>
+        <p>
+          你后续真正接模型 API 时，可以在 <code>my_docs/env_cfg_skills</code> 下放一个本地配置文件：
+          <code>orchestrator_config.local.yml</code>。这个文件会被 orchestrator 默认读取，并被 <code>.gitignore</code> 忽略。
+        </p>
+        <p>可以先复制示例文件：</p>
+        <pre><code>cp my_docs/env_cfg_skills/orchestrator_config.example.yml \
+  my_docs/env_cfg_skills/orchestrator_config.local.yml</code></pre>
+        <pre><code>llm:
+  api_base_url: "https://你的模型服务地址"
+  api_key: "你的本地 API Key"
+  api_key_env: "ENV_CFG_LLM_API_KEY"
+  model: "你的模型名"
+workflow:
+  max_spec_iterations: 3
+  dry_run: true</code></pre>
+        <p>运行方式：</p>
+        <pre><code>python my_docs/env_cfg_skills/orchestrator.py chat --enable_api</code></pre>
+        <div class="note">
+          读取优先级：如果本地配置里写了 <code>llm.api_key</code>，就用它；否则从 <code>llm.api_key_env</code> 指向的环境变量读取。
+          更安全的生产做法仍然是环境变量或密钥服务；本地 demo 可以用 gitignored local 配置。
+        </div>
+      </section>
+
+      <section>
+        <h2>两个 Workflow 的执行结果</h2>
+        <p>
+          <code>generate</code> 和 <code>chat</code> 都会走同一条两阶段 pipeline，输出会分成两段：<code>stage_a_spec_builder</code> 和 <code>stage_b_generator</code>。
+          如果第一段 schema gate 不通过，第二段会被跳过。
+        </p>
+        <table>
+          <thead><tr><th>阶段</th><th>输入</th><th>输出</th><th>失败后</th></tr></thead>
+          <tbody>
+            <tr><td><b>Stage A：Spec Builder</b></td><td>用户自然语言 + schema</td><td>结构化 spec、校验错误、需要追问的问题</td><td>不进入代码生成，先补齐 spec。</td></tr>
+            <tr><td><b>Stage B：Generator</b></td><td>已通过 schema gate 的 spec</td><td>要写入的 env_cfg 文件、注册任务文件、启动命令</td><td>按 checklist / 静态校验修复。</td></tr>
+          </tbody>
+        </table>
+        <p>
+          真正写文件需要显式加 <code>--write</code>，否则默认是 dry-run，只告诉你“会写哪些文件”。
+          这是为了防止模型输出不稳定时误改仓库。
+        </p>
       </section>
 
       <section>
@@ -71,7 +136,7 @@ export ENV_CFG_LLM_API_BASE_URL=https://你的模型服务地址
 export ENV_CFG_LLM_MODEL=你的模型名
 
 python my_docs/env_cfg_skills/orchestrator.py generate "..." --enable_api</code></pre>
-        <div class="warn">当前 API 分支只是接口占位，完整产品化还需要把模型 raw 输出解析成 spec、循环校验并追问用户。</div>
+        <div class="note">当前实现已经把模型输出解析成 YAML/JSON 对象，并会先做 spec schema gate；后续还要补更完整的用户追问交互和 post validation。</div>
       </section>
 
       <section>

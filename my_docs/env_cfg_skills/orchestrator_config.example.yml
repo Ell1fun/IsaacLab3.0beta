@@ -1,0 +1,8 @@
+llm:
+  api_base_url: "https://your-model-api.example.com"
+  api_key: "replace-with-your-local-api-key"
+  api_key_env: "ENV_CFG_LLM_API_KEY"
+  model: "your-model-name"
+workflow:
+  max_spec_iterations: 5
+  dry_run: true
