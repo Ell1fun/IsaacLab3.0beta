@@ -68,6 +68,12 @@ R11_ARM_JOINT_NAMES = [
 ]
 R11_WAIST_JOINT_NAMES = ["torso_yaw_Joint", "torso_roll_Joint", "torso_pitch_Joint"]
 R11_NULLSPACE_JOINT_NAMES = [
+    # Nullspace（零空间）关节列表：当 IK 的主要任务（末端位姿）存在冗余解时，
+    # Pink IK 会在不破坏主要任务的前提下，利用这些关节去优化“次要目标”（secondary objective），
+    # 例如保持更自然的上半身姿态、远离关节限位、减少怪异扭转。
+    #
+    # 这里选择肩/肘 + 腰作为 nullspace 的可调关节，让躯干和大关节承担姿态调整；
+    # 手腕（wrist_*）通常更直接影响 EEF 朝向，放入 nullspace 可能导致末端姿态更“飘”，因此不纳入。
     "left_shoulder_pitch_Joint",
     "left_shoulder_roll_Joint",
     "left_shoulder_yaw_Joint",
@@ -130,6 +136,8 @@ R11_RIGHT_IDLE_WRIST_POSE = (0.249213, 0.204636, 1.156897, 0.074109, -0.074109, 
 # Motion controller 版本使用这两组手部姿态做抓握插值：
 # trigger=0 时使用 open pose，trigger=1 时使用 closed pose，中间值线性插值。
 # 这里只配置会主动控制的手指关节，未配置的关节在 retargeter 中默认保持 0.0。
+# 注意：这不是 OpenXR 手追踪（hand tracking）的逐关节角度映射；它是“没有手指关节追踪时”的简化方案，
+# 用一个 grasp 标量（trigger）把整只手从 OPEN 插值到 CLOSED。手追踪版本使用 DexHandRetargeter（见 _build_r11_pickplace_pipeline）。
 R11_HAND_OPEN_POSE = {
     "left_index_proximal_joint": 0.0,
     "left_middle_proximal_joint": 0.0,
@@ -298,6 +306,10 @@ def _build_r11_pickplace_pipeline():
     hand tracking data. All outputs are flattened into a single action tensor
     via TensorReorderer.
     """
+    # 构建“手追踪（hand tracking）版本”的遥操管线：
+    # OpenXR 手追踪 ->（坐标系对齐/偏置）-> 左右腕目标 pose(7) ->（rebase 到 idle）-> 最终腕目标
+    # OpenXR 手追踪 -> DexHandRetargeter -> 手指关节目标
+    # 最后把多个输出拼成一个一维 action，顺序必须与 ActionsCfg.upper_body_ik 的 action space 完全一致。
 
     from isaacteleop.retargeters import (
         DexHandRetargeter,
@@ -310,7 +322,10 @@ def _build_r11_pickplace_pipeline():
     from isaacteleop.retargeting_engine.interface import OutputCombiner, ValueInput
     from isaacteleop.retargeting_engine.tensor_types import TransformMatrix
 
+    # 1) OpenXR 手追踪输入源（左右手）
     hands = HandsSource(name="hands")
+
+    # 2) XR 的 tracking space 通常以“anchor”为参考系，这里通过 world_T_anchor 把输入变换到仿真 world 坐标系
     transform_input = ValueInput("world_T_anchor", TransformMatrix())
     transformed_hands = hands.transformed(transform_input.output(ValueInput.VALUE))
 
@@ -319,6 +334,8 @@ def _build_r11_pickplace_pipeline():
     # wrist_yaw_Link frames are rotated relative to GR1T2's hand_roll_link
     # frames, so compose the GR1T2 offsets with the measured neutral-frame
     # rotation: R_gr1_task.T @ R_r11_task.
+    # 3) 左手：把 OpenXR 的手腕 pose 变成“左腕 EEF 目标 pose(7)”
+    # target_offset_* 是对齐 OpenXR 约定与 R11 wrist_yaw_Link task frame 的固定补偿（单位：度）
     left_se3 = Se3AbsRetargeter(
         Se3RetargeterConfig(
             input_device=HandsSource.LEFT,
@@ -332,9 +349,13 @@ def _build_r11_pickplace_pipeline():
         name="left_ee_pose",
     )
     connected_left_se3 = left_se3.connect({HandsSource.LEFT: transformed_hands.output(HandsSource.LEFT)})
+
+    # 4) Rebase：把“绝对 wrist pose”重定位到机器人预设 idle wrist pose 附近
+    # 直觉：以操作者的起始姿态为零点，用 delta 叠加到机器人 idle_pose 上，避免一启动就跳到奇怪姿态
     left_pose_rebaser = R11WristPoseRebaser(R11_LEFT_IDLE_WRIST_POSE, name="left_ee_pose_rebased")
     connected_left_pose = left_pose_rebaser.connect({"ee_pose": connected_left_se3.output("ee_pose")})
 
+    # 5) 右手：逻辑与左手一致（target_offset_pitch 为负是因为左右手坐标系/骨架约定不同）
     right_se3 = Se3AbsRetargeter(
         Se3RetargeterConfig(
             input_device=HandsSource.RIGHT,
@@ -351,14 +372,17 @@ def _build_r11_pickplace_pipeline():
     right_pose_rebaser = R11WristPoseRebaser(R11_RIGHT_IDLE_WRIST_POSE, name="right_ee_pose_rebased")
     connected_right_pose = right_pose_rebaser.connect({"ee_pose": connected_right_se3.output("ee_pose")})
 
+    # 6) 手指 retarget 配置（DexPilot）
     left_yaml_path = os.path.join(ISAACLAB_ASSETS_DIR, "revo2_left_hand_dexpilot.yml")
     right_yaml_path = os.path.join(ISAACLAB_ASSETS_DIR, "revo2_right_hand_dexpilot.yml")
     left_urdf_path = os.path.join(ISAACLAB_ASSETS_DIR, "revo2_left_hand.urdf")
     right_urdf_path = os.path.join(ISAACLAB_ASSETS_DIR, "revo2_right_hand.urdf")
 
+    # OpenXR hand tracking 坐标系到 Dex/URDF 约定坐标系的变换（3x3，按行展开）
     operator2mano = (0, -1, 0, -1, 0, 0, 0, 0, -1)
 
-    # Joint names for each hand (11 DOF per hand)
+    # 7) 每只手输出的关节名列表（每手 11 DOF）。
+    # 这些名字必须和 URDF/DexPilot 配置一致，同时也决定后面 TensorReorderer 的输入维度与顺序。
     left_hand_joint_names = [
         "left_index_proximal_joint",
         "left_middle_proximal_joint",
@@ -387,6 +411,7 @@ def _build_r11_pickplace_pipeline():
         "right_thumb_proximal_joint",
     ]
 
+    # 8) DexHandRetargeter：把 OpenXR 的手追踪数据映射到机器人手指关节目标
     left_dex_cfg = DexHandRetargeterConfig(
         hand_retargeting_config=left_yaml_path,
         hand_urdf=left_urdf_path,
@@ -415,6 +440,8 @@ def _build_r11_pickplace_pipeline():
         }
     )
 
+    # 9) 组装最终 action 的元素名与顺序（用于 TensorReorderer 重排）
+    # 左右腕各 7 维：pos(3) + quat(4)，四元数顺序是 (qx,qy,qz,qw)
     left_ee_elements = ["l_pos_x", "l_pos_y", "l_pos_z", "l_quat_x", "l_quat_y", "l_quat_z", "l_quat_w"]
     right_ee_elements = ["r_pos_x", "r_pos_y", "r_pos_z", "r_quat_x", "r_quat_y", "r_quat_z", "r_quat_w"]
     output_order = (
@@ -451,6 +478,7 @@ def _build_r11_pickplace_pipeline():
         ]
     )
 
+    # 10) TensorReorderer：把“左腕 pose / 右腕 pose / 左手关节 / 右手关节”合并成一个一维 action，并重排到 output_order 指定的顺序
     reorderer = TensorReorderer(
         input_config={
             "left_ee_pose": left_ee_elements,
@@ -476,6 +504,7 @@ def _build_r11_pickplace_pipeline():
         }
     )
 
+    # 11) 输出合并：对外暴露一个名为 "action" 的输出，供 env/action manager 读取
     pipeline = OutputCombiner({"action": connected_reorderer.output("output")})
     return pipeline, [left_dex, right_dex]
 
@@ -805,6 +834,8 @@ class ActionsCfg:
     """Action specifications for the R11 PickPlace MDP."""
 
     upper_body_ik = PinkInverseKinematicsActionCfg(
+        # Pink IK 的“主要可控关节”（进入 IK 求解变量的那部分）。这里显式列出关节名而非用正则，
+        # 目的是保证动作维度与关节顺序稳定、可读。
         pink_controlled_joint_names=R11_ARM_JOINT_NAMES.copy(),
         hand_joint_names=[
             "left_index_proximal_joint",
@@ -862,6 +893,9 @@ class ActionsCfg:
                     cost=0.5,
                 ),
                 NullSpacePostureTaskCfg(
+                    # Nullspace 姿态偏好任务：当双手末端位姿目标导致系统冗余时，
+                    # 用 controlled_joints 这些关节在零空间里“顺便”把身体姿态拉到更合理的区域。
+                    # 直觉：FrameTask 决定“手到哪”；NullSpacePosture 决定“手到那时身体怎么摆更舒服/更安全”。
                     cost=0.5,
                     lm_damping=1,
                     controlled_frames=[

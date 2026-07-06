@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>任务注册（gym.register）</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1>任务注册</h1>
+    <p>把一个 <code>env_cfg</code> 绑定到一个 Gymnasium 环境 ID，脚本才能用 <code>--task</code> 创建环境。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./assets.html">assets 清单</a>
+      <a href="./robot_cfg.html">robot cfg</a>
+      <a href="./env_cfg.html">env_cfg</a>
+      <a href="./teleop_pipeline.html">teleop pipeline</a>
+      <a href="./actuator_basics.html">actuator / regex 扫盲</a>
+      <a href="./frames.html">坐标系/关节轴</a>
+      <a class="active" href="./registration.html">任务注册</a>
+      <a href="./debug.html">验证与调试</a>
+      <a href="./r11_map.html">R11 对照</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>最常见注册方式</h2>
+        <pre><code>gym.register(
+  id="Isaac-MyTask-MyRobot-v0",
+  entry_point="isaaclab.envs:ManagerBasedRLEnv",
+  kwargs={
+    "env_cfg_entry_point": "your.module.path:YourEnvCfgClass",
+  },
+  disable_env_checker=True,
+)</code></pre>
+      </section>
+
+      <section>
+        <h2>字段解释</h2>
+        <ul>
+          <li><code>id</code>：你在脚本里传的任务名。</li>
+          <li><code>entry_point</code>：要实例化的环境类（manager-based 通常是 <code>ManagerBasedRLEnv</code>）。</li>
+          <li><code>env_cfg_entry_point</code>：指向 env_cfg 类，格式 <code>python.module:ClassName</code>。</li>
+          <li><code>disable_env_checker</code>：Isaac Lab 任务里常设为 True。</li>
+        </ul>
+        <div class="warn">
+          最常见错误是：模块路径写错、类名写错、或者注册模块没有被导入执行，导致“任务 ID 找不到”。
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

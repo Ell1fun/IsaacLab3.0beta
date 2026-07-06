@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>assets 目录清单</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1>assets 目录应该有什么</h1>
+    <p>目标是让 USD 在任何机器/任何工作目录下都能解析依赖，并且能支撑后续写 robot cfg、写 IK、写任务和调参。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a class="active" href="./assets.html">assets 清单</a>
+      <a href="./robot_cfg.html">robot cfg</a>
+      <a href="./env_cfg.html">env_cfg</a>
+      <a href="./teleop_pipeline.html">teleop pipeline</a>
+      <a href="./actuator_basics.html">actuator / regex 扫盲</a>
+      <a href="./frames.html">坐标系/关节轴</a>
+      <a href="./registration.html">任务注册</a>
+      <a href="./debug.html">验证与调试</a>
+      <a href="./r11_map.html">R11 对照</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>建议交付内容</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>类别</th>
+              <th>建议内容</th>
+              <th>为什么需要</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>主资产</td>
+              <td><code>robot.usd</code>/<code>robot.usda</code>/<code>robot.usdc</code></td>
+              <td>robot cfg 的 <code>UsdFileCfg.usd_path</code> 指向它，用来 spawn 机器人。</td>
+            </tr>
+            <tr>
+              <td>几何资源</td>
+              <td><code>meshes/</code> 下的 <code>.obj/.stl/.dae/.fbx</code> 等</td>
+              <td>USD 常外部引用 mesh；缺失会导致不可见或加载失败。</td>
+            </tr>
+            <tr>
+              <td>材质贴图</td>
+              <td><code>materials/</code>、<code>textures/</code>、<code>.mtl</code>、<code>.png/.jpg</code></td>
+              <td>可视化检查装配、朝向、link 区分；也能减少你排查坐标系的成本。</td>
+            </tr>
+            <tr>
+              <td>源模型</td>
+              <td><code>.urdf</code>/<code>.mjcf</code> 或转换脚本说明</td>
+              <td>排查 joint axis、mimic、限位，做 IK/retargeting 时尤其有用。</td>
+            </tr>
+            <tr>
+              <td>物理参数表</td>
+              <td>力矩/速度上限、质量惯量、摩擦、PD 推荐值、电机/减速器信息</td>
+              <td>用于写 actuator 参数（见 <a href="./actuator_basics.html">actuator 扫盲</a>）。</td>
+            </tr>
+            <tr>
+              <td>命名说明</td>
+              <td>joint/link 命名表、base link、脚底 link、末端 link、手指映射</td>
+              <td>env_cfg 会用名字来选关节/连杆做 action、observation、termination、contact 等。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>推荐目录结构</h2>
+        <pre><code>IsaacLab/
+  assets/
+    my_robot/
+      my_robot.usd
+      my_robot.urdf
+      meshes/
+        ...
+      textures/
+        ...
+      docs/
+        joint_names.md
+        actuator_limits.xlsx
+        zero_pose.png</code></pre>
+        <div class="warn">
+          常见坑：USD 引用绝对路径、Windows 路径、Nucleus 路径；换机器后加载失败。
+          资产交付时最好保证全部依赖都能被相对路径解析。
+        </div>
+      </section>
+
+      <section>
+        <h2>哪些文件通常是“工程侧补的”（不一定来自甲方交付）</h2>
+        <p>
+          以 R11 为例：除了 USD/mesh/贴图这种“资产本体”，为了让 teleop/任务能跑起来，项目里会新增一些“工程侧配置文件”，它们往往不是甲方直接交付的。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>文件/类型</th>
+              <th>通常由谁准备</th>
+              <th>为什么需要</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>手部 URDF（例如 <code>revo2_left_hand.urdf</code>）</td>
+              <td>多为工程侧（也可能来自厂商 SDK/内部模型）</td>
+              <td>用于手指重定向/IK/碰撞语义等，和主机器人 USD 不一定是同一条资产链</td>
+            </tr>
+            <tr>
+              <td>DexPilot 配置（例如 <code>revo2_left_hand_dexpilot.yml</code>）</td>
+              <td>工程侧（IsaacLab/任务作者）</td>
+              <td>这是“手追踪 → 机器人手指关节”的映射策略配置，必须与手部 URDF、关节命名、触点 link 一致</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          你问到的 <code>revo2_left_hand_dexpilot.yml</code> 文件头部带 Isaac Lab 的版权声明，这通常意味着它是项目侧准备/集成进来的，而不是甲方资产包原封不动给的。
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>env_cfg（任务配置）</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1>env_cfg 的目的和内容</h1>
+    <p>env_cfg 解决“机器人在什么任务里做什么”：场景、动作、观测、终止、事件（reset/随机化）、仿真频率等。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./assets.html">assets 清单</a>
+      <a href="./robot_cfg.html">robot cfg</a>
+      <a class="active" href="./env_cfg.html">env_cfg</a>
+      <a href="./teleop_pipeline.html">teleop pipeline</a>
+      <a href="./actuator_basics.html">actuator / regex 扫盲</a>
+      <a href="./frames.html">坐标系/关节轴</a>
+      <a href="./registration.html">任务注册</a>
+      <a href="./debug.html">验证与调试</a>
+      <a href="./r11_map.html">R11 对照</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>典型组成</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>配置块</th>
+              <th>作用</th>
+              <th>通常写什么</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>SceneCfg</td>
+              <td>世界里有什么</td>
+              <td>机器人、桌子/地面、物体、灯光、相机/传感器、env spacing</td>
+            </tr>
+            <tr>
+              <td>ActionsCfg</td>
+              <td>外部动作如何作用到机器人</td>
+              <td>关节位置/速度/力矩、IK action、手爪 action、teleop action</td>
+            </tr>
+            <tr>
+              <td>ObservationsCfg</td>
+              <td>policy 能看到什么</td>
+              <td>关节状态、root 状态、物体状态、末端位姿、相机图像、上一帧 action</td>
+            </tr>
+            <tr>
+              <td>RewardsCfg</td>
+              <td>RL 奖励</td>
+              <td>距离/姿态误差、成功奖励、能耗、平滑项</td>
+            </tr>
+            <tr>
+              <td>TerminationsCfg</td>
+              <td>何时结束 episode</td>
+              <td>超时、失败（掉落/摔倒）、成功</td>
+            </tr>
+            <tr>
+              <td>EventCfg</td>
+              <td>reset 与随机化</td>
+              <td>重置机器人/物体、随机化位姿/质量/摩擦、重置 joint target</td>
+            </tr>
+            <tr>
+              <td>EnvCfg</td>
+              <td>把上面拼成一个环境</td>
+              <td><code>sim.dt</code>、<code>decimation</code>、<code>episode_length_s</code>、physics buffer、teleop</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>env_cfg 里为什么需要 joint_names（以及从哪里来）</h2>
+        <p>
+          env_cfg 需要频繁“选中一批关节/连杆”来做动作、观测、重置与成功判定。因此会出现各种 <code>joint_names</code>（字符串列表）或 <code>joint_names_expr</code>（正则表达式列表）。
+          这些名字通常来自两处：robot cfg（复用通用分组）与 env_cfg（为任务定义顺序/子集）。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>来源</th>
+              <th>适合放什么</th>
+              <th>为什么</th>
+              <th>R11 里的例子</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>robot cfg（isaaclab_assets/robots）</td>
+              <td>通用分组/可复用语义</td>
+              <td>一处定义，多任务复用；避免每个 env_cfg 重复写</td>
+              <td><code>HAND_JOINT_NAMES</code> 从 robot cfg 直接复用</td>
+            </tr>
+            <tr>
+              <td>env_cfg（任务侧）</td>
+              <td>任务专用子集、严格顺序列表</td>
+              <td>动作与观测通常需要固定维度与固定顺序；正则匹配顺序不稳定且可读性差</td>
+              <td><code>R11_ARM_JOINT_NAMES</code> 在 env_cfg 内显式列出并用于 IK 控制</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          你在 robot cfg 里看到的 <code>joint_names_expr</code>（正则）更偏“批量配置 actuator”；而 env_cfg 里的 <code>joint_names</code> 更偏“定义 action/observation 的维度和顺序”。
+          两者都在选关节，但目的不同。
+        </div>
+      </section>
+
+      <section>
+        <h2>joint_names 在 env_cfg 里会用在什么地方（不止 IK）</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>用法</th>
+              <th>你在干什么</th>
+              <th>R11 pick-place 的具体例子</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>IK / 任务空间动作</td>
+              <td>指定 IK 控制哪些关节、nullspace 用哪些关节做姿态偏好</td>
+              <td>
+                <code>PinkInverseKinematicsActionCfg(pink_controlled_joint_names=R11_ARM_JOINT_NAMES)</code>
+                与 <code>NullSpacePostureTaskCfg(controlled_joints=...)</code>
+              </td>
+            </tr>
+            <tr>
+              <td>关节空间动作</td>
+              <td>只控制某一部分关节（例如只控手、或冻结下半身）</td>
+              <td>常见做法是把下半身关节放进“固定/排除列表”，动作空间不包含它们</td>
+            </tr>
+            <tr>
+              <td>观测（Observations）</td>
+              <td>从机器人状态里只取需要的关节子集，保证维度稳定</td>
+              <td><code>R11_HAND_JOINT_NAMES</code> 用于手部关节状态观测（维度固定）</td>
+            </tr>
+            <tr>
+              <td>reset / 初始化（Events）</td>
+              <td>按名字写 <code>init_state.joint_pos</code>、或重置时只改一部分关节</td>
+              <td>例如把下半身关节固定在站姿（<code>R11_FIXED_JOINT_POS</code>）</td>
+            </tr>
+            <tr>
+              <td>调试与映射</td>
+              <td>把“字符串名字”映射到关节索引，打印/记录某些关节曲线</td>
+              <td>常用 <code>find_joints(joint_names)</code> 在运行时解析索引</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="ok">
+          结论：env_cfg 确实会复用 robot cfg 里定义的 joint_names（比如手指），IK action cfg 也会用到关节名列表，但 joint_names 在 env_cfg 的用途远不止 IK。
+        </div>
+      </section>
+
+      <section>
+        <h2>Nullspace 是什么？为什么 IK 里要写 nullspace joints</h2>
+        <p>
+          在 IK（逆运动学）里，控制目标通常是末端位姿（例如 6 维：位置 3 + 朝向 3）。如果可控制的关节自由度多于任务约束，就会出现“解不唯一”：
+          在不改变末端位姿的前提下，关节还能在某些方向上自由调整。这些“不影响主要任务的自由方向”就叫 <strong>nullspace（零空间）</strong>。
+        </p>
+        <p>
+          利用 nullspace 的典型目的，是在满足末端任务的同时，做一些“次要目标”（secondary objective），例如：
+        </p>
+        <ul>
+          <li>保持更自然/更稳定的姿态（例如肘部不要外翻、手臂不要扭到极限）。</li>
+          <li>远离关节限位（降低触发 joint limit 的概率）。</li>
+          <li>减少自碰撞或避免某些危险姿态。</li>
+        </ul>
+        <p>
+          在 R11 pick-place 的 ActionsCfg 里，Pink IK controller 配了 <code>NullSpacePostureTaskCfg</code>，并显式指定了哪些关节参与这个“姿态偏好”任务：
+          <code>controlled_joints=R11_NULLSPACE_JOINT_NAMES</code>（也就是你看到的那份列表）。
+          这份列表的意义是：当末端目标有冗余时，IK 会在这些关节上“顺便”把姿态往一个更合理的方向拉一拉。
+        </p>
+        <div class="note">
+          在当前实现里，nullspace joints 主要选的是肩/肘 + 腰：让大关节承担姿态调整；手腕关节更直接影响末端朝向，通常不放进 nullspace，避免末端姿态更“飘”。
+          这不是硬规则，但属于常见的工程取舍。
+        </div>
+        <div class="note">
+          直觉总结：主要任务（FrameTask）决定“手到哪里”；nullspace 任务决定“手到那里时身体怎么摆更舒服/更安全”。如果没有 nullspace，你会更容易看到奇怪的肘部姿态或关节贴着限位走。
+        </div>
+      </section>
+
+      <section>
+        <h2>手指控制：为什么会有 OPEN/CLOSED pose（而不是直接用 OpenXR 手指关节角）</h2>
+        <p>
+          你在 R11 pick-place 的 env_cfg 里会看到 <code>R11_HAND_OPEN_POSE</code> / <code>R11_HAND_CLOSED_POSE</code> 两组字典。
+          它们的作用不是“把 OpenXR 手追踪的每个关节角直接喂给机器人”，而是为 <strong>motion controller</strong>（只有扳机/按键，没有完整手指关节追踪）提供一个简化的抓握控制：
+        </p>
+        <ul>
+          <li>输入：一个 grasp 标量（例如 trigger，范围通常是 <code>[0, 1]</code>）。</li>
+          <li>输出：手指关节目标角（对字典里列出的关节做 <code>open → closed</code> 线性插值）。</li>
+          <li>未列出的关节：保持默认值（通常是 <code>0.0</code>）。</li>
+        </ul>
+        <div class="note">
+          在这份仓库里同时存在两条 teleop 路线：手追踪版本用 <code>DexHandRetargeter</code> 把 OpenXR 手骨架/姿态映射到机器人手指关节；
+          motion controller 版本则用扳机插值的 OPEN/CLOSED pose 做“整手抓握”。
+          两者都能控制手，但输入信号的分辨率和映射复杂度不同。
+        </div>
+      </section>
+
+      <section>
+        <h2>如何读懂 teleop：从 OpenXR 输入到 env action 的“管线”</h2>
+        <p>
+          如果你想理解“遥操到底怎么实现”，最关键要读的就是 env_cfg 里构建 retargeting pipeline 的函数（例如 <code>_build_r11_pickplace_pipeline</code>）。
+          这段代码把 OpenXR/CloudXR 的输入（手追踪/手柄）转换成一个固定布局的一维 action tensor，最后喂给 <code>ActionsCfg</code>。
+        </p>
+        <ol>
+          <li><b>选择输入源</b>：手追踪用 <code>HandsSource</code>，手柄用 <code>ControllersSource</code>。</li>
+          <li><b>对齐到仿真世界</b>：用 <code>world_T_anchor</code> 把 XR anchor 坐标系变换到 world。</li>
+          <li><b>末端位姿 retarget</b>：<code>Se3AbsRetargeter</code> 产生左右手 EEF 的 pose(7)，并用 <code>target_offset_*</code> 对齐 frame 约定。</li>
+          <li><b>起点重定位</b>：<code>R11WristPoseRebaser</code> 把“绝对 pose”转换为“以 idle_pose 为中心的相对控制”。</li>
+          <li><b>手指 retarget</b>：手追踪版本用 <code>DexHandRetargeter</code> 输出手指关节；手柄版本用 trigger 插值 OPEN/CLOSED。</li>
+          <li><b>合并与重排</b>：<code>TensorReorderer</code> 把多个输出拼成一个 action，并保证顺序严格匹配 <code>ActionsCfg.upper_body_ik</code> 的期望。</li>
+        </ol>
+        <div class="ok">
+          读 teleop 的关键不是“某一行 API 怎么用”，而是确认：输入来自哪里 → 经过哪些坐标系变换/offset → 输出 action 的布局是什么 → ActionsCfg 期望什么布局。
+        </div>
+      </section>
+
+      <section>
+        <h2>DexPilot 是什么？在这里起什么作用？</h2>
+        <p>
+          在 R11 的手追踪遥操管线里，<code>DexPilot</code> 指的是一种“手指重定向（finger retargeting）”的方法/配置类型：
+          它把 OpenXR 的手追踪骨架信息（尤其是指尖位置/姿态）映射成机器人手指关节目标角度。
+        </p>
+        <p>
+          你们在 <code>assets/seres_r11/revo2_left_hand_dexpilot.yml</code> 里能看到它的核心字段：
+        </p>
+        <ul>
+          <li><code>type: DexPilot</code>：说明使用 DexPilot 这套重定向逻辑。</li>
+          <li><code>finger_tip_link_names</code>：指定手指触点/指尖 link（用于计算重定向目标）。</li>
+          <li><code>target_joint_names</code>：指定要输出/控制的手指关节名。</li>
+          <li><code>wrist_link_name</code>：手部 URDF 的基准 link。</li>
+        </ul>
+        <div class="note">
+          因此这里的 “DexHandRetargeter + DexPilot YAML” 相当于：用一份手部 URDF + 一份重定向配置，告诉系统如何把人手的指尖运动变成机器人手指关节角。
+          这就是“你以为可以直接用 OpenXR 手指关节角”背后真正需要的那层映射逻辑。
+        </div>
+      </section>
+
+      <section>
+        <h2>为什么 EEF 用的是 wrist_yaw_Link？还会有别的 Link 吗？</h2>
+        <div class="note">
+          这部分涉及坐标系、关节轴、欧拉角约定。想一次性把概念理顺：看 <a href="./frames.html">坐标系/关节轴</a>。
+        </div>
+        <p>
+          会有别的 Link。URDF/USD 里每个关节（Joint）通常连接两个刚体（Link）：父 Link 与子 Link。
+          很多机器人会把一段串联的关节按“roll/pitch/yaw”命名，于是就会出现 <code>..._wrist_roll_Joint</code>、<code>..._wrist_pitch_Joint</code>、<code>..._wrist_yaw_Joint</code>，
+          以及对应的子 Link：<code>..._wrist_roll_Link</code>、<code>..._wrist_pitch_Link</code>、<code>..._wrist_yaw_Link</code>。
+        </p>
+        <h3>roll / pitch / yaw 分别是哪三个方向？怎么区分？</h3>
+        <p>
+          roll/pitch/yaw 本质上是“绕某个坐标轴的旋转”的人类命名方式。最常见的右手系约定是：
+        </p>
+        <ul>
+          <li>roll：绕 <code>X</code> 轴旋转（像飞机左右机翼上下翻滚）。</li>
+          <li>pitch：绕 <code>Y</code> 轴旋转（像飞机抬头/低头）。</li>
+          <li>yaw：绕 <code>Z</code> 轴旋转（像指南针转向）。</li>
+        </ul>
+        <div class="note">
+          但要注意：这只是“常见约定”。在机器人模型里，最权威的区分方法不是看名字，而是看 URDF/USD 给该关节定义的旋转轴（URDF 的 <code>&lt;axis xyz="..."&gt;</code>）。
+          名字可能叫 yaw，但实际轴向仍以模型文件为准。
+        </div>
+        <h3>你提到的“手竖着/横着放”：roll 还是不是同一个方向？</h3>
+        <p>
+          关键在于：你说的 <code>X/Y/Z</code> 是哪个坐标系的轴。常见有两种坐标系：
+        </p>
+        <ul>
+          <li>世界坐标系（world frame）：固定不动的 <code>X/Y/Z</code>。</li>
+          <li>物体/手腕坐标系（body/end-effector frame）：跟着手一起转的 <code>X/Y/Z</code>。</li>
+        </ul>
+        <p>
+          如果你把 roll/pitch/yaw 定义为“绕世界坐标系的轴转”（外旋/Extrinsic），那世界 <code>X/Y/Z</code> 当然不变。
+          但如果你把 roll/pitch/yaw 定义为“绕物体自身坐标系的轴转”（内旋/Intrinsic，更常见于“物体姿态的欧拉角”表达），
+          那当手的姿态变了，手自身的 <code>X/Y/Z</code> 也跟着变，<strong>同一个 roll 数值对应的空间旋转方向就会变</strong>。
+        </p>
+        <div class="note">
+          这就是为什么“roll 对齐 X、pitch 对齐 Y、yaw 对齐 Z”这句话必须补一句前提：对齐的是“哪个 frame 的 X/Y/Z”，以及欧拉角采用的顺序与内旋/外旋约定。
+          实际系统里最好用四元数/旋转矩阵来存姿态，roll/pitch/yaw 更多用作人类可读的显示方式。
+        </div>
+        <p>
+          在 R11 的 URDF（<code>assets/seres_r11/r11_0615.urdf</code>）里，你能看到腕部确实包含这三段 Link：
+          <code>left_wrist_roll_Link</code>、<code>left_wrist_pitch_Link</code>、<code>left_wrist_yaw_Link</code>（右手同理）。
+        </p>
+        <h3>EEF（末端执行器）到底怎么决定用哪个 Link？</h3>
+        <p>
+          EEF 其实就是你希望 IK/控制器“对齐的目标坐标系 frame”。怎么选通常看任务语义：
+        </p>
+        <ul>
+          <li>如果你把“手腕末端”当末端：通常选腕部链条最后一节（这里就是 <code>..._wrist_yaw_Link</code>）。</li>
+          <li>如果你把“抓取点/工具中心点（TCP）”当末端：最好在 URDF/USD 里增加一个固定的 tool/grasp link（或用一个固定变换 offset），让 EEF 对齐到真正的抓取点。</li>
+          <li>如果你想用手指触点做精细任务：可以选某个 <code>..._touch_link</code>，但 IK 的意义会变成“让某根手指末端去对齐目标”。</li>
+        </ul>
+        <div class="ok">
+          实用原则：EEF 选“你要控制的几何点/姿态”所在的 frame；它应当在 URDF/USD 中存在、命名稳定，并且在动作/观测里保持一致。
+        </div>
+        <p>
+          pick-place 任务把 <code>left_wrist_yaw_Link</code>/<code>right_wrist_yaw_Link</code> 作为 EEF（末端执行器）frame 的原因很朴素：
+          <strong>它是腕部链条的最末端 link</strong>，用它作为“手腕末端坐标系”更符合直觉，也更稳定（frame 跟随关节链条走到最后一节）。
+          当然你也可以选别的 link（比如 <code>..._wrist_pitch_Link</code> 或某个手指触点 link）作为 EEF，
+          但那会改变 IK 的目标 frame（也就改变了动作定义与任务意义）。
+        </p>
+      </section>
+
+      <section>
+        <h2>推荐编写顺序（最省时间的方式）</h2>
+        <ol>
+          <li>先只写 SceneCfg：只 spawn 机器人 + 地面，确认不爆炸。</li>
+          <li>再加任务物体/桌子/目标区域：确认高度和坐标系正确。</li>
+          <li>加最小 ActionsCfg：先让机器人能动（哪怕是固定动作）。</li>
+          <li>再切到你真正需要的 action：例如 IK、teleop、学习算法动作空间。</li>
+          <li>补 ObservationsCfg：先保证维度稳定、名字匹配（regex/关节名）。</li>
+          <li>补 TerminationsCfg + EventCfg：episode 能 reset、能结束、成功/失败判断合理。</li>
+          <li>最后补 rewards/curriculum/randomization。</li>
+        </ol>
+        <div class="note">
+          如果你的目标是 teleop/模仿学习采集数据，<code>rewards = None</code> 也可以；强化学习训练才必须有 rewards。
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

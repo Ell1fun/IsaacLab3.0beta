@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Isaac Lab actuator / regex 扫盲</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1>actuator / regex 扫盲</h1>
+    <p>
+      解释 <code>joint_names_expr</code>、正则表达式怎么读、一个 actuator 控一个还是多个关节，以及“同一套参数模板”到底是什么意思。
+      例子尽量用你当前 R11 的真实配置来讲。
+    </p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./assets.html">assets 清单</a>
+      <a href="./robot_cfg.html">robot cfg</a>
+      <a href="./env_cfg.html">env_cfg</a>
+      <a href="./teleop_pipeline.html">teleop pipeline</a>
+      <a class="active" href="./actuator_basics.html">actuator / regex 扫盲</a>
+      <a href="./frames.html">坐标系/关节轴</a>
+      <a href="./registration.html">任务注册</a>
+      <a href="./debug.html">验证与调试</a>
+      <a href="./r11_map.html">R11 对照</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>1) <code>expr</code> 是什么？</h2>
+        <p><code>expr</code> 是 <code>expression</code> 的缩写。在这里可以理解为“匹配表达式”。</p>
+        <p>
+          <code>joint_names_expr</code> 就是“用一组表达式去匹配关节名”，匹配到的关节被这个 actuator 管。
+          表达式通常是正则（regex），也可以是具体的关节名字符串。
+        </p>
+      </section>
+
+      <section>
+        <h2>2) 正则怎么读：从 <code>.*_hip_.*_Joint</code> 开始</h2>
+        <p>以你文件里的 <code>".*_hip_.*_Joint"</code> 为例（见 <code>seres_r11.py</code> 的腿部关节分组）：</p>
+        <ul>
+          <li><code>.*</code>：任意字符重复 0 次或多次（可以理解为“随便有什么前缀/中间内容”）。</li>
+          <li><code>_hip_</code>：字面匹配，必须包含这段。</li>
+          <li><code>_Joint</code>：字面匹配，必须包含这段。</li>
+        </ul>
+        <div class="grid">
+          <div class="card">
+            <b>能匹配</b>
+            <span><code>left_hip_pitch_Joint</code> / <code>right_hip_yaw_Joint</code></span>
+          </div>
+          <div class="card">
+            <b>不能匹配</b>
+            <span><code>hip_Joint</code>（缺少 <code>_hip_</code>） / <code>left_hip_pitch_joint</code>（大小写不同）</span>
+          </div>
+        </div>
+        <div class="note">
+          在 Isaac Lab 的很多“按名字选东西”的接口里，传入的字符串会被当作正则去匹配；这就是为什么你会看到大量 <code>.*</code>。
+        </div>
+      </section>
+
+      <section>
+        <h2>3) 一个 actuator 是一个电机吗？</h2>
+        <p>
+          不是。更准确地说：一个 actuator 是“一套驱动模型/参数模板 + 一组关节的映射”。它可以管 1 个关节，也可以管很多关节。
+        </p>
+        <p>在你的 R11 配置里，一个 actuator 通常管一组关节，比如：</p>
+        <ul>
+          <li><code>legs</code>：髋/膝等一组下肢关节</li>
+          <li><code>feet</code>：脚踝一组关节</li>
+          <li><code>arms</code>：肩/肘/腕一组关节</li>
+          <li><code>hands</code>：手指关节一大组（还包括 mimic joints）</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>4) armature 是什么？</h2>
+        <p>
+          在 Isaac Lab/PhysX 语境里，<code>armature</code> 可以理解成“关节端附加的等效转动惯量”（更贴近电机语境的话，就是电机转子惯量通过减速比折算到关节侧的等效惯量）。
+        </p>
+        <p>
+          它最常见的工程作用不是“更真实”，而是<strong>让数值更稳定</strong>：当某些 link 的惯量非常小（比如手指末端、很轻的传感器支架），隐式驱动和碰撞接触会让求解器更容易发散或抖动。
+          适当增加 armature，相当于给关节“加一点惯量垫子”，能明显减少高频抖动和不稳定。
+        </p>
+        <div class="grid">
+          <div class="card">
+            <b>什么时候需要更关注 armature</b>
+            <span>小惯量关节（手指/末端）、mimic 关节、接触强的关节（脚踝）、高刚度 PD。</span>
+          </div>
+          <div class="card">
+            <b>直观现象</b>
+            <span>armature 太小：末端抖/数值发散；太大：关节“变笨重”、响应变慢。</span>
+          </div>
+        </div>
+        <div class="note">
+          你在 R11 的 <code>hands</code> actuator 里能看到专门设置了 <code>armature=0.001</code>，这就是典型的“为小惯量手指稳定性而加”的做法。
+        </div>
+      </section>
+
+      <section>
+        <h2>5) 控制信号到底是什么？（目标位置/目标速度/目标力矩）</h2>
+        <p>
+          先把“你给引擎什么”和“引擎最终算出什么”分清楚：
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>你提供的控制信号</th>
+              <th>物理引擎通常做什么</th>
+              <th>直觉类比</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>目标位置（关节角）</td>
+              <td>根据位置误差 + 阻尼项（以及限制/接触/约束）计算需要的关节力矩/力并施加</td>
+              <td>像“弹簧拉到目标角度 + 阻尼刹车”</td>
+            </tr>
+            <tr>
+              <td>目标速度</td>
+              <td>根据速度误差（以及限制/接触/约束）计算需要的关节力矩/力并施加</td>
+              <td>像“速度伺服”</td>
+            </tr>
+            <tr>
+              <td>目标力矩（effort）</td>
+              <td>把你给的力矩直接作为外力施加，然后由动力学/接触求解推进出速度和位置</td>
+              <td>像“你手动拧一个扳手施力，运动结果由物理决定”</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          “给目标力矩，输出速度和位置”不是一种 drive 模式，而是物理仿真的基本过程：你施加力矩，系统自然会积分出速度/位置。
+          所谓“控制方式”的差别主要在于：你给的是目标（位置/速度）还是直接给力矩，以及力矩是由谁算出来的（你自己算还是引擎算）。
+        </div>
+      </section>
+
+      <section>
+        <h2>6) 什么是“纯隐式 PD”？它是不是包含目标位置和目标速度？</h2>
+        <p>
+          这里的“纯隐式 PD”，指的是使用 <code>ImplicitActuatorCfg</code>（以及 USD 里 PhysX joint drive 对应的弹簧阻尼）来做关节驱动：
+          你给 <code>stiffness</code>（Kp）和 <code>damping</code>（Kd），每步给一个目标位置/目标速度，力矩由物理引擎在求解器内部隐式地算出来并施加。
+        </p>
+        <p>
+          你现在的理解可以成立：你提供目标（角度/速度/位置的一种或组合），物理引擎会根据当前误差与 <code>stiffness/damping</code> 计算出“需要施加的关节力矩/力”并应用到仿真里。
+          但这个力矩不是随便求出来的，它遵循 PD/drive 的形式，并且会受到 <code>effort_limit_sim</code>、<code>velocity_limit_sim</code>、接触与约束求解等因素影响。
+        </p>
+        <div class="note">
+          “隐式”的核心含义是：驱动作为约束/弹簧阻尼项进入求解器，通常比“显式积分 + 大 Kp”更稳定，尤其在仿真步长不小或接触很多时。
+        </div>
+
+        <h3>什么是“显式积分 + 大 Kp”？</h3>
+        <p>
+          “显式积分”可以粗略理解为：你在每个仿真步里先根据当前状态计算一个力矩 <code>τ</code>，然后用离散时间积分把
+          <code>q̇</code>、<code>q</code> 往前推进一步。最典型的（概念）控制律是：
+        </p>
+        <pre><code>τ = Kp * (q* - q) + Kd * (q̇* - q̇)</code></pre>
+        <p>
+          当你把 <code>Kp</code> 设得很大时，这相当于“非常硬的弹簧”。显式积分在步长 <code>dt</code> 不够小、或者接触/约束很多的情况下，
+          会更容易出现数值问题：抖动、过冲、甚至发散。隐式 drive 的优势就在于：它把这类“弹簧阻尼”以更稳的方式并入求解器迭代里处理，
+          通常允许更大的 <code>dt</code> 和更强的刚度而不炸。
+        </p>
+
+        <h3>一个常见误区</h3>
+        <p>
+          “隐式 PD”这个说法通常是指“位置驱动的弹簧阻尼（Kp/Kd）在求解器里隐式处理”。如果你只做纯速度目标，
+          它更像“速度伺服 drive”。工程上大家有时也会把它们都笼统叫 drive 控制，但严格说：
+          <strong>是否叫 PD 取决于你是否在做位置误差的弹簧项（Kp）</strong>。
+        </p>
+        <p>
+          这句话展开解释就是：
+          <strong>P（Proportional）</strong> 那一项是 <code>Kp * (q* - q)</code>，它来自“位置误差的弹簧”；
+          如果你的控制律里没有这项（例如只做 <code>τ ≈ Kd * (q̇* - q̇)</code> 的速度伺服），那严格意义上就不是 PD，而是更偏 D/速度伺服。
+        </p>
+
+        <h3>Kp 和 Kd 分别在干什么？什么时候用它们？</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>参数</th>
+              <th>直觉</th>
+              <th>主要作用</th>
+              <th>调太大/太小的典型现象</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>Kp</code>（stiffness）</td>
+              <td>弹簧硬度</td>
+              <td>把关节“拉到目标角度”并抵抗外界扰动（重力、接触推挤）</td>
+              <td>太小：软、撑不住；太大：更容易抖/过冲/接触不稳，且更依赖合适的 <code>Kd</code>、<code>armature</code> 和求解器</td>
+            </tr>
+            <tr>
+              <td><code>Kd</code>（damping）</td>
+              <td>刹车/阻尼</td>
+              <td>抑制振荡和过冲，让系统更“稳”、更快收敛</td>
+              <td>太小：容易振、弹；太大：动作发闷、响应慢，甚至像“黏住”</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          实用记法：<code>Kp</code> 决定“想拉多用力”，<code>Kd</code> 决定“怎么刹住不弹”。大多数位置跟踪都同时需要 Kp 和 Kd；
+          只有在你明确想做“速度伺服”时才可能弱化/取消 Kp。
+        </div>
+
+        <h3>除了隐式 PD（drive），还有哪些常见选择</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>方式</th>
+              <th>你在 Isaac Lab 里通常会看到的配置/做法</th>
+              <th>适用场景（直觉）</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>显式电机/控制模型（你自己算力矩）</td>
+              <td><code>IdealPDActuatorCfg</code>、<code>DCMotorCfg</code>、<code>ActuatorNetMLPCfg</code> 等（名字在仓库里能看到）</td>
+              <td>想更贴近真实电机/电流限制/延迟、或想跨不同物理后端保持一致的动力学行为</td>
+            </tr>
+            <tr>
+              <td>直接力矩（effort）控制</td>
+              <td>action 直接输出关节力矩（或由上层控制器计算后输出）</td>
+              <td>研究控制器/算法、或者想完全掌控动力学；但更难调，容易不稳定</td>
+            </tr>
+            <tr>
+              <td>速度目标驱动</td>
+              <td>给 drive 速度目标（仍可能是隐式约束）</td>
+              <td>某些移动/旋转部件，或者你希望速度而非位置作为主控制量</td>
+            </tr>
+            <tr>
+              <td>任务空间/IK 控制</td>
+              <td>例如你 R11 pick-place 用的 Pink IK：action 是末端位姿目标，内部再转成关节目标/力矩</td>
+              <td>操控任务更自然（抓取/放置），不用手工写关节空间轨迹</td>
+            </tr>
+            <tr>
+              <td>混合/分层控制</td>
+              <td>上层输出末端目标或轨迹，下层用 drive 或力矩控制跟踪；不同关节采用不同模式</td>
+              <td>工程里很常见：腿用一种模板，手用另一种模板，腰/头再单独处理</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="warn">
+          你看到的 actuator（比如 <code>ImplicitActuatorCfg</code>）解决的是“关节怎么被驱动、参数怎么设”；至于你的 action 到底是“关节角”还是“末端位姿”，是在 env_cfg 的 ActionsCfg 里决定的。
+        </div>
+      </section>
+
+      <section>
+        <h2>7) 为什么 IK 看起来像隐式 PD？它们到底差在哪？</h2>
+        <p>
+          你觉得“IK 和隐式 PD 很像”，这是非常正常的，因为它们在工程实践里经常是<strong>串在一起用</strong>的：
+          IK 负责把“末端目标”转成“关节目标”，而隐式 PD（drive）负责把“关节目标”转成“关节力矩/力”并施加到物理引擎里。
+        </p>
+        <div class="grid">
+          <div class="card">
+            <b>IK（Inverse Kinematics）解决的问题</b>
+            <span>几何/运动学：给末端期望位姿（位置+朝向），求一组关节角（q）。不直接关心力矩。</span>
+          </div>
+          <div class="card">
+            <b>隐式 PD（drive）解决的问题</b>
+            <span>动力学/伺服：给关节目标（q* 或 q̇*）+ Kp/Kd，求要施加的关节力矩/力并推进仿真。</span>
+          </div>
+        </div>
+        <p>把它们串起来看会更清晰：</p>
+        <pre><code>末端目标 (x*, R*)
+  ↓  IK/任务空间控制器（如 Pink IK）
+关节目标 (q* 或 Δq*)
+  ↓  actuator/drive（隐式 PD）
+关节力矩/力 (τ)
+  ↓  物理引擎（含接触/约束求解）
+下一步状态 (q, q̇)</code></pre>
+        <div class="note">
+          所以 IK “像” PD 的地方在于：它也在“追目标”。但 IK 追的是末端位姿的运动学误差，PD 追的是关节误差并产生力矩。
+        </div>
+      </section>
+
+      <section>
+        <h2>8) 什么是速度伺服（velocity servo）？</h2>
+        <p>
+          速度伺服就是：你给一个目标关节速度 <code>q̇*</code>，系统根据当前速度误差 <code>(q̇* - q̇)</code>
+          生成驱动力矩，让关节速度跟上目标。
+        </p>
+        <p>直觉上它像一个“速度版的跟踪器”，最简单的形式可以理解成：</p>
+        <pre><code>τ ≈ Kd * (q̇* - q̇)   （再叠加限制/摩擦/接触/求解器处理）</code></pre>
+        <p>
+          如果同时还叠加了位置误差的弹簧项（Kp），那就回到了“位置+速度一起用”的 PD/drive 形式。
+        </p>
+        <div class="warn">
+          速度伺服在“速度跟踪”上更直接，但它不天然保证位置会停在某个角度（除非你的速度目标最终收敛到 0 且配合其它约束）。
+          因此很多关节仍然更常用“位置 drive（隐式 PD）”。
+        </div>
+      </section>
+
+      <section>
+        <h2>9) 什么叫“同一套控制假设 / 参数模板”？</h2>
+        <p>
+          你可以把它理解为：我准备用同一种控制方式驱动这些关节，并且用同一种规则/公式/表格来生成参数。
+          这些关节放在同一 actuator 里，主要是为了复用同一个“模板”。
+        </p>
+        <p>
+          你现在这个感觉很关键：确实经常会出现“公式形式看起来一样，但其实模板不同”。原因是：
+          <strong>模板不是“公式长得一样”</strong>，而是“你决定用哪些共享旋钮（假设），并按什么策略把它们映射成每个关节的参数”。
+          换句话说，模板更像“参数生成器的结构”，而不是最终数字本身。
+        </p>
+        <div class="grid">
+          <div class="card">
+            <b>共享旋钮是什么？</b>
+            <span>指一组关节共享的“全局调节量”。你转动它，会让这一组关节整体动态特性一起变，比如整体更硬、更软、更稳、更快。</span>
+          </div>
+          <div class="card">
+            <b>策略是什么？</b>
+            <span>指你把“旋钮/测量值”变成每个关节具体参数的规则与取舍：用哪些公式、乘哪些缩放、怎么限幅、怎么处理小惯量与接触。</span>
+          </div>
+        </div>
+        <p>
+          具体到 R11 这类文件里，常见的“共享旋钮”包括：目标带宽/自然频率 <code>ω</code>（例如 6Hz 或 10Hz）、阻尼比 <code>ζ</code>、
+          以及某些整体缩放因子（例如整组乘 <code>0.5</code>、<code>0.3</code> 或 <code>2.0</code> 这种做法）。
+          这些量一旦改变，往往代表你想要的动态风格变了，因此更像“换模板”而不是“同模板微调”。
+        </p>
+        <p>
+          “策略”则更偏工程规则，比如：
+        </p>
+        <ul>
+          <li>脚踝接触敏感：整体更稳健（更强阻尼/更严格限幅/必要时整体放大刚度或 armature）。</li>
+          <li>手指小惯量：优先数值稳定（提高 armature、避免过小惯量在高刚度下发散）。</li>
+          <li>同类大关节：优先跟踪与抗扰（保持更一致的带宽设定，再按关节惯量/上限做差异化）。</li>
+        </ul>
+        <h3>改策略 = 改推算公式吗？公式可以随便改吗？</h3>
+        <p>
+          “改策略”可能包含改公式，但并不等于只改公式。更常见的“改策略”其实是改共享旋钮或改约束/缩放，而不是发明一条全新的公式。
+        </p>
+        <p>
+          为了不混淆，可以把“参数怎么来”拆成三层（从底到顶理解）：
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>层级</th>
+              <th>你在改什么</th>
+              <th>典型例子</th>
+              <th>改动含义</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>参数化方式（公式形式）</td>
+              <td>从“测量/假设”到 <code>Kp/Kd</code> 的映射结构</td>
+              <td><code>Kp ∝ J·ω²</code>、<code>Kd ∝ J·ω</code></td>
+              <td>决定这套参数有没有明确物理意义与一致的动态解释；一般不轻易改</td>
+            </tr>
+            <tr>
+              <td>共享旋钮（全局风格）</td>
+              <td>同一组关节共享的全局调节量</td>
+              <td><code>ω</code>、<code>ζ</code>、整组缩放因子</td>
+              <td>决定“整体更快/更慢、更硬/更软、更稳/更弹”的风格；这是最常见的调参入口</td>
+            </tr>
+            <tr>
+              <td>策略参数（工程取舍）</td>
+              <td>稳定性与约束的取舍规则（不一定全组统一）</td>
+              <td><code>effort_limit_sim</code>、<code>velocity_limit_sim</code>、<code>armature</code>、少量 per-joint 覆盖</td>
+              <td>决定“能不能跟上、会不会炸、接触稳不稳、像不像真实”；通常要结合现象迭代</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          你刚问的“那不就是在改共享旋钮吗？”——是的，<code>ω/ζ</code> 和“整组缩放”这种属于共享旋钮；限幅和 armature 更偏策略参数。
+          工程上优先改旋钮/策略参数，是因为它们可解释、可控；改公式属于更底层的参数化方式，风险更高。
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>你改的东西</th>
+              <th>属于策略的哪一层</th>
+              <th>风险与建议</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>改 <code>ω</code>（带宽/自然频率）或 <code>ζ</code>（阻尼比）</td>
+              <td>共享旋钮（目标动态风格）</td>
+              <td>很常见、可控；先从小幅调整开始，观察跟踪、抖动、接触稳定性。</td>
+            </tr>
+            <tr>
+              <td>加/减一个整体缩放因子（例如整组乘 <code>2.0</code>）</td>
+              <td>策略取舍（稳 vs 灵）</td>
+              <td>常用于接触敏感关节；注意不要把上层控制器“调得太硬”导致接触爆炸。</td>
+            </tr>
+            <tr>
+              <td>改限幅（<code>effort_limit_sim</code>/<code>velocity_limit_sim</code>）</td>
+              <td>约束策略</td>
+              <td>很关键；限幅太小会跟不上，太大可能导致数值问题或不真实的冲击。</td>
+            </tr>
+            <tr>
+              <td>改 armature 的取值方式（按硬件估算 vs 为稳定性加垫）</td>
+              <td>数值稳定策略</td>
+              <td>常见且必要，尤其手指；但 armature 过大可能让动态变“更重更慢”，影响 sim2real。</td>
+            </tr>
+            <tr>
+              <td>更换整套公式（例如不再按 <code>Kp ∝ J·ω²</code>、<code>Kd ∝ J·ω</code>）</td>
+              <td>模型/参数化方式</td>
+              <td>不建议“随便改”。除非你明确知道目标闭环响应、单位和物理意义，否则容易得到不稳定或不一致的控制特性。</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          最稳妥的做法是：先固定“公式形式”，把它当作参数化方式，然后主要通过 <code>ω/ζ</code>、缩放、限幅、armature 这些“可解释的旋钮”来调。
+          只有当你发现“这套参数化方式表达不了你要的行为”时，才考虑换公式或换 actuator 模型。
+        </div>
+        <p>
+          一个更精确的定义：如果两组关节的 <code>Kp/Kd</code> 都来自同一类关系式（例如都长得像 <code>Kp ∝ J·ω²</code>、<code>Kd ∝ J·ω</code>），
+          但它们使用了不同的目标带宽 <code>ω</code>、不同的阻尼比 <code>ζ</code>、不同的缩放系数（例如额外乘 <code>0.5</code> / <code>0.3</code> / <code>2.0</code>），
+          或者不同的 armature/限幅策略，那么它们在工程上就是不同模板（因为“共享假设”变了）。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>模板是否相同</th>
+              <th>你会看到的写法特征</th>
+              <th>直觉解释</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>同模板</td>
+              <td>同一类关节用同一组常量/同一公式推导，组内最多做少量 per-joint 覆盖</td>
+              <td>同类硬件/同类工况，参数在同一量级，调参逻辑一致</td>
+            </tr>
+            <tr>
+              <td>不同模板</td>
+              <td>需要换一套频率/阻尼比/缩放因子，或需要极端的 armature/刚度来稳定小惯量或接触；往往要单独分组</td>
+              <td>量级差异或工况差异大，用同一套逻辑会顾此失彼</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          类比：同样是 <code>y = m x + b</code> 这个“形式”，但你选的 <code>m</code>、<code>b</code> 代表了不同的系统假设（不同带宽/阻尼/缩放/限幅策略）。
+          在控制里，<code>ω/ζ</code> 这类“共享旋钮”变了，就意味着你在追求不同的动态特性，这就是模板变化的核心。
+        </div>
+
+        <h3>例子 A：用“自然频率 + 阻尼比”推导 PD（同一套路）</h3>
+        <p>R11 文件里有两套明显不同的模板：</p>
+        <ul>
+          <li>谐波减速器（KGU 系列）：用 6Hz（<code>NATURAL_FREQ_HARMONIC = 6 * 2π</code>）</li>
+          <li>行星减速器（SETZ 系列）：用 10Hz（<code>NATURAL_FREQ_PLANET = 10 * 2π</code>）</li>
+        </ul>
+        <p>你会看到它们都遵循同一种“套路”（同一模板的形式），只是频率和 armature 不同：</p>
+        <pre><code>stiffness ≈ armature * ω^2 * (可选缩放因子)
+damping   ≈ 2 * ζ * armature * ω * (可选缩放因子)</code></pre>
+        <p>
+          这就是“同一套路”：参数是从（armature、自然频率、阻尼比）推出来的，而不是拍脑袋一个个写。
+        </p>
+        <p>
+          这类就是“模板相同”的典型：对一类关节，你只需要改变 <code>armature</code> 或少量缩放，<code>Kp/Kd</code> 的生成逻辑不变。
+        </p>
+
+        <h3>例子 B：为什么脚踝（feet）经常单独一组？（控制工况不同）</h3>
+        <p>
+          脚踝直接参与地面接触，冲击大、数值更敏感。如果跟髋/膝放一组，用同样的阻尼/armature，常见后果是：
+          要么太软导致脚底“糊”、站不稳；要么太硬导致接触爆炸/抖动。
+        </p>
+        <p>
+          你在 R11 的 <code>feet</code> actuator 里能看到明显的“模板差异”：参数被乘以 <code>2.0</code>（更硬、更抗接触扰动），而且用的是另一套 SETZ70 参数。
+        </p>
+        <p>
+          这就是“模板不同”的典型：同样是隐式 drive，但脚踝的策略强调“接触稳定性”，所以会有不同的量级/缩放/限幅取舍。
+        </p>
+
+        <h3>例子 C：为什么手（hands）更是必须单独一组？（惯量尺度不同 + mimic）</h3>
+        <p>
+          手指末端 link 的惯量可能非常小，纯隐式 PD 很容易数值不稳定；而 mimic joints 还会带来耦合。
+          所以手常见的模板是：
+        </p>
+        <ul>
+          <li>更大的 <code>armature</code>（给小惯量“垫一层”让隐式积分稳定）</li>
+          <li>更强的 <code>stiffness/damping</code>（让手指能真正“握住”，而不是飘）</li>
+          <li>可能把 proximal + distal 一起进 actuator（避免 distal 只靠 mimic 弹簧而软塌）</li>
+        </ul>
+        <div class="note">
+          你在 R11 文件里 <code>hands</code> actuator 的参数非常“极端”，就是在处理这种惯量尺度差异的问题。
+        </div>
+      </section>
+
+      <section>
+        <h2>10) “同组参数要一致吗？”正确说法</h2>
+        <p>
+          更准确的说法是：同一 actuator 组内，关节最好“同类、同量级、同控制策略”，所以参数应该能用同一模板生成；
+          但不要求完全一致。
+        </p>
+        <p>在 Isaac Lab 里，你可以在同一个 actuator 内做“组内差异化”，例如：</p>
+        <ul>
+          <li><code>stiffness</code> 可以是一个数（全组统一），也可以是一个 dict（按关节名/正则分别设）。</li>
+          <li><code>effort_limit_sim</code>、<code>velocity_limit_sim</code> 同理。</li>
+        </ul>
+        <div class="ok">
+          实用做法：先按“模板”分组（legs/feet/arms/hands），再在组内用 dict 给少数关节做微调。
+        </div>
+      </section>
+
+      <section>
+        <h2>11) 既然都是隐式 PD，为什么不把所有关节放进一个 actuator？</h2>
+        <p>
+          纯从“控制类型”看，确实可以把所有关节都放进一个 <code>ImplicitActuatorCfg</code>。但工程上通常不这么做，
+          主要不是因为“能不能”，而是因为“好不好用、好不好调、稳不稳、好不好维护”。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>原因</th>
+              <th>解释</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>参数量级差异太大</td>
+              <td>腿大关节、脚踝接触关节、手指小惯量关节的 <code>Kp/Kd</code>、<code>armature</code>、限幅常常差几个数量级；放一组就会变成巨大的 per-joint 字典，难读难调。</td>
+            </tr>
+            <tr>
+              <td>接触工况不同</td>
+              <td>脚踝/足底直接参与接触，数值更敏感，常需要不同的阻尼/armature/限幅策略；跟上半身放一组很容易为了“稳脚”而把手臂调得发闷，或反过来为了“手灵活”导致脚不稳。</td>
+            </tr>
+            <tr>
+              <td>特殊关节（mimic/小惯量）需要单独照顾</td>
+              <td>手指/从动关节常需要特定的 <code>armature</code> 和更强的阻尼策略，否则抖动或发散；单独分组能把“特殊策略”隔离出来。</td>
+            </tr>
+            <tr>
+              <td>便于复用与变体</td>
+              <td>你可以对不同组做 copy/replace（例如上半身高 PD、下半身冻结、禁用手）而不影响其它组；单一大 actuator 会让这些变体更难做。</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          结论：控制“类型”相同（都是隐式 drive）并不意味着“模板”相同。分组的核心价值是把不同量级和不同工况隔离，让调参更可控。
+        </div>
+      </section>
+
+      <section>
+        <h2>12) 模板在仿真里不一样，会不会导致真实表现很差？</h2>
+        <p>
+          不一定，很多时候恰恰相反：真实机器人里也<strong>不可能</strong>“所有关节一套参数通吃”。你之所以觉得“真实环境都是一样的”，
+          通常是因为你把“整台机器人一个控制系统”误解成了“每个关节的动力学和控制增益都一样”。
+        </p>
+        <div class="grid">
+          <div class="card">
+            <b>真实机器人并不一样的地方</b>
+            <span>不同关节电机/减速器型号不同、减速比不同、负载惯量不同、摩擦不同、承重与接触工况不同。</span>
+          </div>
+          <div class="card">
+            <b>为什么仿真要分模板</b>
+            <span>让每类关节用更合理的量级与策略，避免“为了稳脚踝把手臂调得发闷”或“为了手灵活导致脚不稳”。</span>
+          </div>
+        </div>
+
+        <h3>一个具体例子（直觉）</h3>
+        <ul>
+          <li>腿大关节：需要更大力矩、更强的抗扰（支撑体重、抵抗地面冲击）。</li>
+          <li>手指小关节：惯量小、摩擦小，更怕抖，往往需要不同的阻尼/armature 策略稳定下来。</li>
+          <li>脚踝：接触最敏感，稳定性优先，常常要更稳健的限幅/阻尼取舍。</li>
+        </ul>
+
+        <h3>什么时候会“真的伤到 sim2real”？</h3>
+        <p>
+          模板分得对不对，关键看你训练/控制最终想复现的真实系统是什么。如果仿真里为了稳定性做了过度的“魔改”，确实可能产生差距，例如：
+        </p>
+        <ul>
+          <li><strong>armature 设得远大于真实等效惯量</strong>：会让关节显得更“重”、响应更慢，策略可能学到不真实的动态。</li>
+          <li><strong>Kp/Kd 设得远离真实控制器带宽</strong>：会让跟踪特性与能耗分布不一致。</li>
+          <li><strong>限幅/摩擦与真实差很多</strong>：会影响可达性、接触稳定性、动作幅度。</li>
+        </ul>
+        <div class="note">
+          实用建议：用“同一类硬件/同一类工况”的模板分组是合理的；要关注的是<strong>每个模板的量级是否和真实相符</strong>，
+          而不是追求“所有关节一套参数”。
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

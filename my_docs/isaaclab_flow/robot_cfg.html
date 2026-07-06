@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>robot cfg（ArticulationCfg）</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1>robot cfg 的目的和内容</h1>
+    <p>
+      robot cfg 解决“机器人本体怎么被加载和驱动”。它不关心具体任务（pick/place/locomotion/teleop），任务逻辑在 env_cfg 里写。
+    </p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./assets.html">assets 清单</a>
+      <a class="active" href="./robot_cfg.html">robot cfg</a>
+      <a href="./env_cfg.html">env_cfg</a>
+      <a href="./teleop_pipeline.html">teleop pipeline</a>
+      <a href="./actuator_basics.html">actuator / regex 扫盲</a>
+      <a href="./frames.html">坐标系/关节轴</a>
+      <a href="./registration.html">任务注册</a>
+      <a href="./debug.html">验证与调试</a>
+      <a href="./r11_map.html">R11 对照</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>robot cfg 在代码里长什么样？</h2>
+        <p>通常就是一个或多个 <code>ArticulationCfg</code>（有时会有不同变体）。</p>
+        <pre><code>MY_ROBOT_CFG = ArticulationCfg(
+  spawn=sim_utils.UsdFileCfg(...),
+  init_state=ArticulationCfg.InitialStateCfg(...),
+  actuators={ ... },
+)</code></pre>
+        <div class="note">
+          <code>actuators</code> 是 robot cfg 的核心之一：它把“关节分组 + PD/限幅/armature”等控制参数定义清楚。细节见
+          <a href="./actuator_basics.html">actuator / regex 扫盲</a>。
+        </div>
+      </section>
+
+      <section>
+        <h2>robot cfg 一般写哪些内容</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>模块</th>
+              <th>写什么</th>
+              <th>为什么</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>路径常量</td>
+              <td>资产目录、USD 路径（必要时 URDF/mesh 路径）</td>
+              <td>避免在多个 env_cfg 重复写路径、减少路径解析错误</td>
+            </tr>
+            <tr>
+              <td>命名分组</td>
+              <td>腿/脚/腰/臂/头/手的 joint/link 名（可用 regex）</td>
+              <td>后续按分组配置 actuator、观测、接触、IK frame 等</td>
+            </tr>
+            <tr>
+              <td>spawn 配置</td>
+              <td>从 USD spawn、刚体属性、articulation 属性、自碰撞、contact sensor</td>
+              <td>决定仿真稳定性、碰撞、接触数据来源</td>
+            </tr>
+            <tr>
+              <td>init_state</td>
+              <td>根位姿、默认关节角、默认关节速度</td>
+              <td>reset 后姿态是否合理，是否穿地/自碰撞</td>
+            </tr>
+            <tr>
+              <td>actuators</td>
+              <td>关节组、PD、armature、摩擦、速度/力矩限制</td>
+              <td>决定“怎么驱动”而不是“任务做什么”</td>
+            </tr>
+            <tr>
+              <td>变体 cfg</td>
+              <td>copy/replace 出 fixed base、高 PD、禁用手等变体</td>
+              <td>同一个机器人在不同任务/控制方式下需要不同参数</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>robot cfg 不应该放什么</h2>
+        <ul>
+          <li>任务成功/失败条件、reward 计算。</li>
+          <li>policy observation 的具体拼接方式。</li>
+          <li>桌子、物体、目标点、随机化策略等场景/任务元素（除非它属于机器人本体）。</li>
+        </ul>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

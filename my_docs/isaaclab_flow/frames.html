@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>坐标系与关节轴（Link / Joint / EEF）</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1>坐标系与关节轴（Link / Joint / EEF）</h1>
+    <p>把你刚问到的“roll/pitch/yaw 到底对谁、axis xyz 是啥、joint frame 怎么来、EEF 该怎么选”用一套清晰的分层说透。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./assets.html">assets 清单</a>
+      <a href="./robot_cfg.html">robot cfg</a>
+      <a href="./env_cfg.html">env_cfg</a>
+      <a href="./teleop_pipeline.html">teleop pipeline</a>
+      <a href="./actuator_basics.html">actuator / regex 扫盲</a>
+      <a class="active" href="./frames.html">坐标系/关节轴</a>
+      <a href="./registration.html">任务注册</a>
+      <a href="./debug.html">验证与调试</a>
+      <a href="./r11_map.html">R11 对照</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>1) 三个最常用的坐标系：World / Link / Joint</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>名字</th>
+              <th>它是谁</th>
+              <th>是不是固定不动</th>
+              <th>你在工程里什么时候关心它</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>World frame</td>
+              <td>仿真世界的参考坐标系</td>
+              <td>固定</td>
+              <td>放置机器人/物体、读取位姿、定义目标点</td>
+            </tr>
+            <tr>
+              <td>Link frame</td>
+              <td>每个刚体（link）的局部坐标系</td>
+              <td>随刚体运动</td>
+              <td>读取某个 link 的姿态、做接触/传感、定义 EEF 候选 frame</td>
+            </tr>
+            <tr>
+              <td>Joint frame</td>
+              <td>每个关节（joint）的局部坐标系</td>
+              <td>跟着父 link 运动；相对父 link 的定义固定</td>
+              <td>理解 URDF 的 <code>origin</code>/<code>axis</code>、判断关节转轴方向</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          经验法则：你在控制/IK 里大多关心“某个 frame 在 world 里的位姿”；而当你解释 URDF 时，最容易混淆的是“axis 到底在哪个 frame 里表达”。
+        </div>
+      </section>
+
+      <section>
+        <h2>1.5) XR 里的 anchor 坐标系是什么？什么是 world_T_anchor？</h2>
+        <p>
+          在 XR（OpenXR/CloudXR）里，手/手柄的追踪数据往往不是直接在仿真 world 坐标系下给出的，而是在一个 XR 的“参考空间”里给出的。
+          这个参考空间在你们的遥操管线里通常称为 <strong>anchor frame</strong>（锚点坐标系）。
+        </p>
+        <p>
+          <code>world_T_anchor</code> 是一个 4×4 齐次变换矩阵，表示“anchor 坐标系到仿真 world 坐标系”的变换：
+        </p>
+        <pre><code>p_world = world_T_anchor @ p_anchor</code></pre>
+        <p>
+          直觉上它做的事情是：把 XR 空间里测到的手的位置/朝向，搬到仿真世界的正确位置（并对齐坐标轴约定）。
+          如果不乘这个矩阵，你拿到的 pose 仍然在 XR anchor 下，直接当作机器人末端目标会出现“方向不对/位置飘/整体偏移”的问题。
+        </p>
+        <div class="note">
+          在 IsaacTeleop 里，设备层会把目标 rebase 矩阵和 world_T_anchor 组合起来喂给管线：
+          <code>target_T_world @ world_T_anchor</code>。其中 world_T_anchor 负责把 XR anchor 对齐到 world，target_T_world 则可以把输出再重定位到另一个目标 frame（例如机器人 base）。
+        </div>
+      </section>
+
+      <section>
+        <h2>2) URDF 里 joint 的 parent/child/origin/axis 分别是什么意思</h2>
+        <p>以一段典型 URDF 为例：</p>
+        <pre><code>&lt;joint name="left_hip_pitch_Joint" type="revolute"&gt;
+  &lt;origin xyz="..." rpy="..." /&gt;
+  &lt;parent link="pelvis" /&gt;
+  &lt;child link="left_hip_pitch_Link" /&gt;
+  &lt;axis xyz="0 -1 0" /&gt;
+&lt;/joint&gt;</code></pre>
+        <ul>
+          <li><code>parent</code>/<code>child</code>：这个关节连接的两个 link。关节把 child “挂”在 parent 上。</li>
+          <li><code>origin xyz/rpy</code>：定义 joint frame 相对 parent link frame 的位姿（位置+朝向）。</li>
+          <li><code>axis xyz</code>：revolute 关节的转轴方向向量，表达在 joint frame 里。<code>0 -1 0</code> 意味着“绕 joint 的 -Y 轴转”。</li>
+        </ul>
+        <div class="note">
+          很多人会误以为 <code>axis</code> 是对 world 或直接对 parent 的轴。更准确的说法是：它先定义在 joint frame；而 joint frame 的朝向由 <code>origin rpy</code> 相对 parent 决定。
+        </div>
+      </section>
+
+      <section>
+        <h2>3) 右手系与转动正方向（为什么 axis 有正负号）</h2>
+        <p>
+          URDF 的关节角正方向遵循右手定则：右手大拇指指向 <code>axis</code> 向量方向，其余四指弯曲方向就是关节角增大的方向。
+          因此 <code>axis</code> 写 <code>(0, -1, 0)</code> 与写 <code>(0, 1, 0)</code> 会导致“正角度方向”相反。
+        </p>
+        <div class="ok">
+          调试技巧：如果你发现某个关节控制方向完全反了，第一优先检查就是 <code>axis</code> 的符号，以及上层 action/控制器对关节角正方向的约定是否一致。
+        </div>
+      </section>
+
+      <section>
+        <h2>4) roll/pitch/yaw 到底对哪根轴？为什么“手横竖放”会让直觉出错</h2>
+        <p>
+          roll/pitch/yaw 是欧拉角的俗称，常见说法是 roll 对 X、pitch 对 Y、yaw 对 Z。但这句话必须补两个前提：
+        </p>
+        <ul>
+          <li>对齐的是哪个 frame 的 X/Y/Z（world 还是物体/EEF 自身）。</li>
+          <li>欧拉角顺序与约定是什么（内旋 intrinsic 还是外旋 extrinsic，以及 XYZ/ZYX 等顺序）。</li>
+        </ul>
+        <p>
+          你的“手竖着/横着放”的困惑，通常来自于：姿态的 roll/pitch/yaw 是按“物体自身 frame（随物体一起转）”的内旋定义出来的。
+          当手整体姿态改变时，它自身的 X/Y/Z 也改变，同一个 roll 数值对应的空间旋转方向自然会变。
+        </p>
+        <div class="note">
+          在工程实现里，姿态更可靠的表示是四元数或旋转矩阵；roll/pitch/yaw 更适合作为人类可读的显示，不适合作为“唯一的真理”去推导关节轴。
+        </div>
+      </section>
+
+      <section>
+        <h2>5) “joint 名字里的 yaw/roll/pitch” vs “URDF 的 axis”</h2>
+        <p>
+          在你们的 R11 代码里经常出现 <code>..._hip_yaw_Joint</code>、<code>..._hip_roll_Joint</code>、<code>..._hip_pitch_Joint</code>。
+          这些后缀首先是“语义命名”，用于让人读起来知道这是髋关节链条的三个自由度。
+        </p>
+        <p>
+          一个常见误解是把它直接等价成“yaw=绕 joint 的 Z、roll=绕 joint 的 X、pitch=绕 joint 的 Y”。这种等价在某些约定下可能成立，但在工程里不可靠：
+        </p>
+        <ul>
+          <li>名字只是语义标签，不能保证和某个固定轴一一对应。</li>
+          <li>URDF 的 <code>axis xyz</code> 才是 revolute joint 的真实转轴（而且是定义在 joint frame 里）。</li>
+          <li>joint frame 的朝向由 <code>origin rpy</code> 相对 parent link 定义，因此即使 <code>axis</code> 写成 <code>(0, 0, 1)</code>，它在世界里也会随 parent 姿态变化。</li>
+        </ul>
+        <div class="ok">
+          最权威的“到底绕哪根轴转”来自 URDF/USD 的轴定义（URDF 的 <code>&lt;axis xyz="..."&gt;</code>），而不是名字里写了 yaw/roll/pitch。
+          这也是为什么你会看到某些关节名字叫 yaw，但 <code>axis</code> 并不是 <code>(0, 0, 1)</code>。
+        </div>
+        <h3>R11 例子：为什么 <code>left_hip_yaw_Joint</code> 的 <code>axis</code> 看起来是绕 X，但名字却叫 yaw？</h3>
+        <p>
+          以 R11 的这段为例（<code>left_hip_yaw_Joint</code>）：
+        </p>
+        <pre><code>&lt;joint name="left_hip_yaw_Joint" type="revolute"&gt;
+  &lt;origin ... rpy="-3.14159059 1.46160946 0.00000206" /&gt;
+  &lt;parent link="left_hip_roll_Link" /&gt;
+  &lt;child link="left_hip_yaw_Link" /&gt;
+  &lt;axis xyz="1 0 0" /&gt;
+&lt;/joint&gt;</code></pre>
+        <p>
+          这里的 <code>axis xyz="1 0 0"</code> 不是“绕世界 X 轴”，甚至也不是“绕 parent link 的 X 轴”，而是<strong>绕 joint frame 的 X 轴</strong>。
+          而 joint frame 的朝向由 <code>origin rpy</code> 定义：它相对 parent link 有一个很大的旋转（这里接近 <code>-π</code> 和 <code>~84°</code>），
+          所以 joint 的“X 轴”在 parent/world 里可能已经被转到你直觉里的“竖直方向”附近。
+        </p>
+        <p>
+          换句话说：名字里的 yaw 往往表达的是“这个自由度在人体/机器人语义上是 yaw（水平转向/绕竖直轴的那一段）”，
+          但它在 URDF 中具体用 <code>(1,0,0)</code> 还是 <code>(0,0,1)</code> 来写，取决于导出时选择的 joint frame 定义（<code>origin rpy</code> 怎么摆）。
+        </p>
+        <div class="note">
+          判断“它在世界里是不是绕竖直轴 yaw”的正确方式是：把 joint frame 的旋转（<code>origin rpy</code>）和 parent/world 的姿态一起考虑，把局部轴 <code>(1,0,0)</code> 变换到 world 再看方向。
+          因此不要用“axis 数字长得像 X/Y/Z”去推断 yaw/roll/pitch 的语义。
+        </div>
+        <h3>一个好用的心智模型：名字描述“语义”，axis 决定“物理真相”</h3>
+        <p>
+          你可以这样记：很多机器人把关节命名成 yaw/roll/pitch，并不是在声明“它严格绕 world 的 Z/X/Y 轴转”，而是在描述它在站姿/零位附近的运动语义：
+        </p>
+        <ul>
+          <li><b>yaw</b>：更像“在水平面转向/扭转”的自由度（站姿附近看起来接近绕竖直方向）。</li>
+          <li><b>roll</b>：更像“左右侧倾/侧摆”的自由度。</li>
+          <li><b>pitch</b>：更像“前后摆动/屈伸”的自由度。</li>
+        </ul>
+        <div class="ok">
+          但工程上不要用名字推轴。真正的转轴来自 URDF/USD 的 <code>axis</code>（在 joint frame），而 joint frame 又由 <code>origin rpy</code> 定义。
+          所以“语义命名”与“固定世界轴”不是一回事。
+        </div>
+      </section>
+
+      <section>
+        <h2>6) EEF（末端执行器 frame）怎么选：为什么 R11 用 wrist_yaw_Link</h2>
+        <p>
+          EEF 在这里指“IK/控制器对齐的目标 frame”。它不要求一定是最后一节 link，但必须是一个你能稳定拿到位姿的 frame。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>你想控制什么</th>
+              <th>推荐 EEF frame</th>
+              <th>原因</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>手腕末端</td>
+              <td>腕部链条最后一节（如 <code>..._wrist_yaw_Link</code>）</td>
+              <td>语义清晰、命名稳定、对多数操控任务够用</td>
+            </tr>
+            <tr>
+              <td>抓取点 / 工具中心点（TCP）</td>
+              <td>独立的 tool/grasp frame（URDF/USD 新增固定 link 或固定 offset）</td>
+              <td>让 IK 目标对齐到真正接触点，减少“手腕对齐了但抓取点偏了”的误差</td>
+            </tr>
+            <tr>
+              <td>指尖/触点</td>
+              <td>某个手指末端 link（例如 <code>..._touch_link</code>）</td>
+              <td>适合精细操作，但会改变动作语义：不再是手腕控制</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          在 R11 这个 pick-place 配置里，用 <code>left_wrist_yaw_Link</code>/<code>right_wrist_yaw_Link</code> 作为 EEF 的核心原因是：它们是腕部 roll/pitch/yaw 串联链条的末端 link，适合作为“手腕末端 frame”。
+        </div>
+      </section>
+
+      <section>
+        <h2>7) 工程里常见的“pose(7)”表示：位置 + 四元数</h2>
+        <p>
+          在你们的 R11 pick-place 配置里，经常会看到一个长度为 7 的 pose 元组，例如：
+          <code>(x, y, z, qx, qy, qz, qw)</code>。这表示：
+        </p>
+        <ul>
+          <li>前三个：位置 <code>(x, y, z)</code>（通常单位是米）。</li>
+          <li>后四个：姿态四元数 <code>(qx, qy, qz, qw)</code>（这是 SciPy <code>Rotation.from_quat</code> 的顺序）。</li>
+        </ul>
+        <div class="note">
+          这不是欧拉角（roll/pitch/yaw），四元数没有“分别对应某个轴”的直觉分量意义。它表示的是一个整体旋转。
+          至于这个 pose 是“在 world 里”还是“在某个局部 frame 里”，需要看产生/使用它的模块：例如 teleop retargeting 里通常是相对 world 的 EEF 目标位姿。
+        </div>
+      </section>
+
+      <section>
+        <h2>7.5) 什么是 SE(3)？为什么叫 Se3Abs？</h2>
+        <p>
+          <strong>SE(3)</strong> 指的是三维空间中的“刚体位姿”（Rigid Transform）：包含 3D 平移 + 3D 旋转。
+          在工程实现中，它通常用以下等价表示之一表达：
+        </p>
+        <ul>
+          <li>4×4 齐次变换矩阵（同时包含旋转矩阵 R 与平移 t）。</li>
+          <li>pose(7)：位置 <code>(x,y,z)</code> + 四元数 <code>(qx,qy,qz,qw)</code>。</li>
+        </ul>
+        <p>
+          因此 <code>Se3AbsRetargeter</code> 可以直觉理解为：
+          <strong>把输入设备（OpenXR 手追踪/手柄）的“绝对 SE(3) 位姿”映射成机器人末端执行器的“绝对位姿目标”</strong>。
+        </p>
+        <ul>
+          <li><code>Se3</code>：输出的是 3D 位姿（平移+旋转）。</li>
+          <li><code>Abs</code>：Absolute（绝对），与 <code>Rel</code>（Relative，相对/增量）对应。</li>
+        </ul>
+        <div class="note">
+          绝对（Abs）模式：输入 pose 直接决定输出目标 pose。
+          相对（Rel）模式：输入 pose 的变化量（delta）决定输出目标的增量，更像“手柄推动一下，末端走一点”。
+        </div>
+      </section>
+
+      <section>
+        <h2>8) R11 的 idle wrist pose 是怎么用的（rebase 逻辑）</h2>
+        <p>
+          在 R11 pick-place 的 teleop/retargeting 管线里，<code>R11_LEFT_IDLE_WRIST_POSE</code>/<code>R11_RIGHT_IDLE_WRIST_POSE</code> 用来把“手追踪的绝对位姿”
+          重新居中到机器人一个中立（idle）腕部姿态上。其核心思路就是你说的：用“变化量（delta）”叠加到 idle pose 上。
+        </p>
+        <p>
+          逻辑可以用下面三步概括（对应 <code>R11WristPoseRebaser</code> 的实现）：
+        </p>
+        <ol>
+          <li>记录开始时刻的手追踪 pose：<code>start_pose</code>（位置与四元数）。</li>
+          <li>每帧计算相对变化量：<code>delta_pos = raw_pos - start_pos</code>，<code>delta_rot = raw_rot * inv(start_rot)</code>。</li>
+          <li>输出目标 wrist pose：<code>target_pos = idle_pos + delta_pos</code>，<code>target_rot = delta_rot * idle_rot</code>。</li>
+        </ol>
+        <div class="note">
+          这个 rebase 过程的好处是：无论操作者一开始站在什么姿态/位置，都能让“开始动作”的目标对齐到机器人预设的 idle wrist pose，避免一上来手就跳到奇怪位置。
+        </div>
+        <h3>这段代码能不能复用？能，但要明确它依赖的“前提”</h3>
+        <p>
+          这种“记录起始 pose → 用 delta 叠加到 idle pose”的结构是非常通用的：换机器人、换任务都可以复用。
+          但它看起来简单，是因为很多关键假设被隐藏在上下游里；复用时最容易踩坑的点通常在这些前提上：
+        </p>
+        <ul>
+          <li><b>同一参考系</b>：raw_pose、start_pose、idle_pose 必须表达在同一个 frame 下（通常是 world 下的 EEF 目标）。如果上游在 XR anchor，下游在 world，就必须先做 world_T_anchor 变换。</li>
+          <li><b>同一姿态约定</b>：这里使用的是四元数 <code>(qx,qy,qz,qw)</code>（SciPy 的顺序）。如果换成 <code>(qw,qx,qy,qz)</code> 或欧拉角，会直接错。</li>
+          <li><b>乘法顺序不随便换</b>：<code>delta_rot = raw * inv(start)</code> 与 <code>inv(start) * raw</code> 的意义不同；<code>target = delta * idle</code> 与 <code>idle * delta</code> 也不同。</li>
+          <li><b>idle pose 的语义</b>：idle_pose 必须对应“机器人想要的中立末端 frame”（例如 wrist_yaw_Link）。换了 EEF link 或换了手工具中心点（TCP），idle_pose 也要跟着换。</li>
+          <li><b>重置与启动逻辑</b>：这里在 reset/非 RUNNING 时清空 start_pose，并输出 idle。不同任务可能需要不同的触发条件，否则会出现“突然重新归零”的手感。</li>
+          <li><b>安全约束</b>：这段本身不做 workspace 限制、速度限制、碰撞/自碰撞处理；不同机器人/任务往往需要在下游加 clamp/滤波/限速。</li>
+        </ul>
+        <div class="ok">
+          实用结论：这段可以当作一个可复用的“rebase 模块”。复用时不要只复制代码本体，更要对齐 frame、四元数顺序、EEF 定义和 reset 语义。
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Isaac Lab 机器人任务接入流程（目录）</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1>Isaac Lab 机器人任务接入流程</h1>
+    <p>
+      面向你当前的 R11 项目，把“业务方给资产 → 写机器人 cfg → 写 env_cfg → 注册任务 → 验证运行”的全流程拆成多页。
+      从这里开始阅读。
+    </p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a class="active" href="./index.html">总览</a>
+      <a href="./assets.html">assets 清单</a>
+      <a href="./robot_cfg.html">robot cfg</a>
+      <a href="./env_cfg.html">env_cfg</a>
+      <a href="./teleop_pipeline.html">teleop pipeline</a>
+      <a href="./actuator_basics.html">actuator / regex 扫盲</a>
+      <a href="./frames.html">坐标系/关节轴</a>
+      <a href="./registration.html">任务注册</a>
+      <a href="./debug.html">验证与调试</a>
+      <a href="./r11_map.html">R11 对照</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>一图理解：代码结构怎么串起来</h2>
+        <div class="grid">
+          <div class="card">
+            <b>Step 1：assets</b>
+            <span>放 USD + meshes + 贴图 + URDF/MJCF + 参数表，让资产能被稳定解析。</span>
+          </div>
+          <div class="card">
+            <b>Step 2：robot cfg（ArticulationCfg）</b>
+            <span>回答“机器人怎么 spawn、初始姿态、关节分组、actuator 参数”。</span>
+          </div>
+          <div class="card">
+            <b>Step 3：env_cfg（任务）</b>
+            <span>回答“场景里有什么、动作/观测是什么、成功失败怎么判、怎么 reset”。</span>
+          </div>
+          <div class="card">
+            <b>Step 4：注册 + 运行</b>
+            <span>把 env_cfg 挂到一个 Gymnasium ID 上，脚本就能创建环境。</span>
+          </div>
+        </div>
+        <div class="note">
+          关键分工：<code>robots/*.py</code> 专注“机器人本体”；<code>*env_cfg.py</code> 专注“任务/场景/MDP”。
+        </div>
+      </section>
+
+      <section>
+        <h2>推荐阅读顺序（从零到能改代码）</h2>
+        <ol>
+          <li><a href="./assets.html">assets 清单</a>：先把“甲方交付 vs 工程侧补齐”的边界搞清楚。</li>
+          <li><a href="./robot_cfg.html">robot cfg</a>：理解机器人本体怎么 spawn、actuator 怎么配。</li>
+          <li><a href="./actuator_basics.html">actuator / regex 扫盲</a>：补齐 joint 分组、隐式 PD、参数模板等概念。</li>
+          <li><a href="./frames.html">坐标系/关节轴</a>：补齐 URDF axis/origin、pose(7)、SE(3)、EEF frame 这些概念。</li>
+          <li><a href="./env_cfg.html">env_cfg</a>：回到任务文件，理解 action/obs/reset/IK/nullspace 等如何落地。</li>
+          <li><a href="./teleop_pipeline.html">teleop pipeline</a>：理解 OpenXR 输入如何被拼成 env action，并对比不同机器人为何写法不同。</li>
+          <li><a href="./registration.html">任务注册</a>：把 cfg 注册成可运行任务。</li>
+          <li><a href="./debug.html">验证与调试</a>：快速定位 “坐标不对/手感怪/关节顺序错” 这类问题。</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>你刚问到的扫盲点：看哪些页</h2>
+        <ul>
+          <li>正则怎么读、<code>expr</code> 是什么、<code>joint_names_expr</code> 匹配到哪些关节：看 <a href="./actuator_basics.html">actuator / regex 扫盲</a>。</li>
+          <li>为什么 legs/feet/hands 要分组、什么叫“同一套参数模板”：也在 <a href="./actuator_basics.html">actuator / regex 扫盲</a>，里面用 R11 的实际参数举例。</li>
+          <li>Link/Joint/World 的坐标系关系、URDF 的 <code>origin</code>/<code>axis</code>、roll/pitch/yaw 为什么会混：看 <a href="./frames.html">坐标系/关节轴</a>。</li>
+          <li>任务层（PickPlaceR11）怎么用 robot cfg：看 <a href="./env_cfg.html">env_cfg</a> 和 <a href="./r11_map.html">R11 对照</a>。</li>
+          <li>手追踪/手柄输入如何变成 action、R11 与 G1 pipeline 为什么不同：看 <a href="./teleop_pipeline.html">teleop pipeline</a>。</li>
+        </ul>
+        <p class="small">提示：这些页面都是静态 HTML，直接双击打开即可离线浏览。</p>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

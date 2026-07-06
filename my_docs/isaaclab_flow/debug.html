@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>验证与调试</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1>验证与调试</h1>
+    <p>不要一上来就训练：先验证资产和机器人稳定，再验证环境 reset/step，最后才做 teleop/训练。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./assets.html">assets 清单</a>
+      <a href="./robot_cfg.html">robot cfg</a>
+      <a href="./env_cfg.html">env_cfg</a>
+      <a href="./teleop_pipeline.html">teleop pipeline</a>
+      <a href="./actuator_basics.html">actuator / regex 扫盲</a>
+      <a href="./frames.html">坐标系/关节轴</a>
+      <a href="./registration.html">任务注册</a>
+      <a class="active" href="./debug.html">验证与调试</a>
+      <a href="./r11_map.html">R11 对照</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>推荐验证顺序</h2>
+        <ol>
+          <li>USD 单独打开：mesh/材质/关节层级/碰撞体/质量惯量。</li>
+          <li>只 spawn 机器人：确认不爆炸、不穿地、站姿合理。</li>
+          <li>检查关节名匹配：regex 是否覆盖了预期 DOF。</li>
+          <li>调 actuator：从保守参数到目标参数，观察抖动/软/爆。</li>
+          <li>跑 env：先 reset + zero action，再 random action。</li>
+          <li>最后接 teleop 或训练。</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>常用脚本</h2>
+        <pre><code>./isaaclab.sh -p scripts/environments/list_envs.py
+./isaaclab.sh -p scripts/environments/zero_agent.py --task Isaac-PickPlace-R11-Abs-v0 --num_envs 1
+./isaaclab.sh -p scripts/environments/random_agent.py --task Isaac-PickPlace-R11-Abs-v0 --num_envs 1</code></pre>
+      </section>
+
+      <section>
+        <h2>常见问题速查</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>现象</th>
+              <th>优先检查</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>机器人不可见/mesh 丢</td>
+              <td>USD 依赖路径、<code>meshes/</code> 是否齐全。</td>
+            </tr>
+            <tr>
+              <td>一按 play 就爆炸</td>
+              <td>碰撞体重叠、自碰撞、惯量异常、初始姿态穿地、solver iteration。</td>
+            </tr>
+            <tr>
+              <td>关节不动</td>
+              <td><code>joint_names_expr</code> 是否匹配、USD drive 是否存在、关节是否 mimic/fixed。</td>
+            </tr>
+            <tr>
+              <td>动作很软/跟踪差</td>
+              <td><code>stiffness/damping</code>、<code>armature</code>、<code>effort_limit_sim</code> 是否合理。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>当前 R11 项目对照</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1>当前 R11 项目对照</h1>
+    <p>把你仓库里 R11 相关的关键文件按“谁依赖谁、各自职责”列出来，方便你顺藤摸瓜读代码。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./assets.html">assets 清单</a>
+      <a href="./robot_cfg.html">robot cfg</a>
+      <a href="./env_cfg.html">env_cfg</a>
+      <a href="./teleop_pipeline.html">teleop pipeline</a>
+      <a href="./actuator_basics.html">actuator / regex 扫盲</a>
+      <a href="./frames.html">坐标系/关节轴</a>
+      <a href="./registration.html">任务注册</a>
+      <a href="./debug.html">验证与调试</a>
+      <a class="active" href="./r11_map.html">R11 对照</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>关键文件</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>文件</th>
+              <th>职责</th>
+              <th>你读的时候重点看什么</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>assets/seres_r11/r11_0615.usd</code></td>
+              <td>机器人主 USD</td>
+              <td>关节/连杆命名、碰撞体、自碰撞、Articulation root、外部引用路径</td>
+            </tr>
+            <tr>
+              <td><code>assets/seres_r11/meshes/r11_0615/</code></td>
+              <td>USD 依赖的 mesh</td>
+              <td>是否完整、是否有绝对路径依赖</td>
+            </tr>
+            <tr>
+              <td><code>source/isaaclab_assets/isaaclab_assets/robots/seres_r11.py</code></td>
+              <td>R11 robot cfg</td>
+              <td>关节分组、actuators、<code>R11_A2_32DOF_REAL</code>、<code>R11_A2_HIGH_PD_CFG</code></td>
+            </tr>
+            <tr>
+              <td><code>source/isaaclab_tasks/.../pick_place/pickplace_seres_r11_env_cfg.py</code></td>
+              <td>R11 pick-place env_cfg</td>
+              <td>SceneCfg、ActionsCfg（Pink IK）、ObservationsCfg、TerminationsCfg、EventCfg、teleop pipeline</td>
+            </tr>
+            <tr>
+              <td><code>source/isaaclab_tasks/.../pick_place/mdp/</code></td>
+              <td>任务函数（obs/termination/event）</td>
+              <td>成功条件、物体观测、末端位姿、reset 逻辑</td>
+            </tr>
+            <tr>
+              <td><code>source/isaaclab_tasks/.../pick_place/__init__.py</code></td>
+              <td>注册任务 ID</td>
+              <td><code>Isaac-PickPlace-R11-Abs-v0</code> 等是否正确指向 env_cfg 类</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>R11 的控制方式概览（你现在看到的是不是“基本都是隐式 PD”？）</h2>
+        <p>
+          是的：在 <code>seres_r11.py</code> 这一层，R11 的关节驱动基本都通过 <code>ImplicitActuatorCfg</code> 配置，
+          所以从“关节如何产生力矩/力”的角度看，它主要是 drive/隐式 PD 体系。
+        </p>
+        <p>
+          但要注意：任务里你不一定直接给关节角。以 R11 pick-place 为例，ActionsCfg 用的是 Pink IK（任务空间控制）：
+          也就是说上层 action 可能是“末端位姿目标”，先经 IK 转成“关节目标”，底层再由隐式 drive（PD）在求解器里产生力矩并推进仿真。
+        </p>
+        <pre><code>任务 action（末端位姿） → IK（求关节目标） → 隐式 drive/PD（求力矩） → 物理引擎更新状态</code></pre>
+        <div class="note">
+          所以你看到的“IK 控制”并不和“隐式 PD”冲突：IK 和 PD 常常是上下两层，IK 决定关节目标，PD 决定怎么用力去追目标。
+        </div>
+      </section>
+
+      <section>
+        <h2>KGU / SETZ 是什么？08/11/14、70/90 又代表什么？</h2>
+        <p>
+          在 <code>seres_r11.py</code> 里，<code>KGU</code> 与 <code>SETZ</code> 是对两类不同“电机+减速器/关节模组”的命名标签，用来把一整套参数（armature、Kp/Kd、限幅、摩擦）
+          作为“型号档位”复用到不同关节上。它们不是 Isaac Lab 的通用术语，而是这份 R11 配置里沿用的硬件分类命名。
+        </p>
+        <ul>
+          <li><code>KGU</code>：文件注释里写的是“谐波减速器（KGU 系列）”。</li>
+          <li><code>SETZ</code>：文件注释里写的是“行星减速器（SETZ 系列）”。</li>
+        </ul>
+        <p>
+          后面的数字（例如 <code>KGU_08/11/14</code>、<code>SETZ70/90</code>）代表同系列里的不同规格档位。你不需要知道它精确对应“外径/型号编码”的行业含义，
+          只要把它当作“不同力矩/速度/等效惯量等级”的编号即可：数字越大，通常能力越强（文件里也能看到对应的力矩上限/armature 更大）。
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>标签</th>
+              <th>在 R11 里代表的含义（你需要掌握的）</th>
+              <th>你能在文件里看到的直接证据</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>KGU_08</code></td>
+              <td>较小等级的谐波关节模组（多用于小负载关节）</td>
+              <td><code>EFFORT_LIMIT_KGU08 = 18.56</code>、<code>ARMATURE_KGU_08 = 0.12</code></td>
+            </tr>
+            <tr>
+              <td><code>KGU_11</code></td>
+              <td>中等级的谐波关节模组</td>
+              <td><code>EFFORT_LIMIT_KGU11 = 30.91</code>、<code>ARMATURE_KGU_11 = 0.32</code></td>
+            </tr>
+            <tr>
+              <td><code>KGU_14</code></td>
+              <td>较大等级的谐波关节模组（多用于肩/腰等较大关节）</td>
+              <td><code>EFFORT_LIMIT_KGU14 = 45.74</code>、<code>ARMATURE_KGU_14 = 0.19</code></td>
+            </tr>
+            <tr>
+              <td><code>SETZ70</code></td>
+              <td>较小等级的行星关节模组（多用于脚踝/腰 yaw 这类）</td>
+              <td><code>EFFORT_LIMIT_SETZ70 = 85</code>、<code>ARMATURE_SETZ70 = 0.013312</code></td>
+            </tr>
+            <tr>
+              <td><code>SETZ90</code></td>
+              <td>较大等级的行星关节模组（多用于腿部大关节）</td>
+              <td><code>EFFORT_LIMIT_SETZ90 = 150</code>、<code>ARMATURE_SETZ90 = 0.04851</code></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          你在代码里判断“它们代表什么”的最可靠方式不是猜行业编码，而是看这份配置给它们绑定了什么：<code>armature</code>、<code>effort/velocity limit</code>、
+          <code>stiffness/damping</code>、<code>friction</code>。这些就是仿真里真正生效的含义。
+        </div>
+        <p>
+          具体到 R11 的 actuator 分配，你可以直接从 <code>actuators</code> 里读出“哪个部位用哪个档位”，例如：腿部 hip/knee 用 <code>SETZ90</code>，
+          脚踝用 <code>SETZ70</code>（并整体乘 <code>2.0</code>），手臂 shoulder/elbow/wrist 分别用 <code>KGU14/11/08</code>。
+        </p>
+      </section>
+
+      <section>
+        <h2>推荐阅读路径（从 robot cfg 到 env_cfg）</h2>
+        <ol>
+          <li>先读 <code>seres_r11.py</code>：看 robot 怎么 spawn、actuator 怎么分组、默认站姿。</li>
+          <li>再读 <code>pickplace_seres_r11_env_cfg.py</code> 的 SceneCfg：看它如何把 robot cfg replace 到场景里。</li>
+          <li>再读 ActionsCfg：看 action 是怎么从 teleop/IK 变成关节目标。</li>
+          <li>最后读 mdp 目录：看观测和成功/失败条件怎么定义。</li>
+        </ol>
+        <div class="ok">
+          你最近问到的“为什么分 legs/feet/hands、正则怎么匹配”，建议配合阅读
+          <a href="./actuator_basics.html">actuator / regex 扫盲</a>。
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

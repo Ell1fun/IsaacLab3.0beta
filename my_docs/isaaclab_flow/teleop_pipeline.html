@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Teleop Pipeline：对比与抽象</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header>
+    <h1>Teleop Pipeline：对比与抽象</h1>
+    <p>
+      对比 R11 与 Unitree G1 Inspire Hand 的 pick-place 遥操 pipeline 写法，解释它们为什么不同，并给出“抽象成一套通用写法”的拆分思路与复用边界。
+    </p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./assets.html">assets 清单</a>
+      <a href="./robot_cfg.html">robot cfg</a>
+      <a href="./env_cfg.html">env_cfg</a>
+      <a class="active" href="./teleop_pipeline.html">teleop pipeline</a>
+      <a href="./actuator_basics.html">actuator / regex 扫盲</a>
+      <a href="./frames.html">坐标系/关节轴</a>
+      <a href="./registration.html">任务注册</a>
+      <a href="./debug.html">验证与调试</a>
+      <a href="./r11_map.html">R11 对照</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>共同骨架：它们本质上是同一种数据流</h2>
+        <p>这两个文件虽然细节不同，但骨架基本一致：</p>
+        <ol>
+          <li>输入源：OpenXR 手追踪（<code>HandsSource</code>）。</li>
+          <li>坐标系对齐：外部输入 <code>world_T_anchor</code>，把 XR anchor frame 变换到仿真 world。</li>
+          <li>腕部末端：两个 <code>Se3AbsRetargeter</code> 分别输出左右腕的 <code>ee_pose(7)</code>。</li>
+          <li>手指：两个 <code>DexHandRetargeter</code> 输出左右手指关节目标。</li>
+          <li>拼 action：<code>TensorReorderer</code> 把多个输出拼成一个一维 action，并保证顺序与 env 的 action space 一致。</li>
+        </ol>
+        <div class="note">
+          因此你可以把 “pipeline builder” 理解为：把一堆异构输入（两只手的 pose + 两只手的关节）组合成一个固定维度、固定顺序的 action 张量。
+        </div>
+      </section>
+
+      <section>
+        <h2>差异对比：R11 vs G1 Inspire Hand</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>维度</th>
+              <th>R11（seres_r11）</th>
+              <th>Unitree G1 Inspire Hand</th>
+              <th>为什么会不同</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>函数入口</td>
+              <td><code>_build_r11_pickplace_pipeline()</code></td>
+              <td><code>_build_g1_inspire_pickplace_pipeline()</code></td>
+              <td>不同机器人/任务文件各自封装。</td>
+            </tr>
+            <tr>
+              <td>腕部坐标补偿</td>
+              <td>左右腕都有 <code>target_offset_roll/pitch/yaw</code>（并且左右 pitch 取反）。</td>
+              <td>左右腕 offset 不同（左 pitch=90，右 roll=180、pitch=-90）。</td>
+              <td>OpenXR 追踪 frame 与机器人 USD 里 “task frame / EEF frame” 的对齐关系不同。</td>
+            </tr>
+            <tr>
+              <td>是否做 rebase（idle pose）</td>
+              <td>有：<code>R11WristPoseRebaser</code> 把绝对 pose 重定位到 <code>R11_*_IDLE_WRIST_POSE</code> 附近。</td>
+              <td>无：Se3Abs 输出直接进入 reorder。</td>
+              <td>是否需要“启动不跳变”的体验取舍，以及上游 retargeter 的零位对齐是否已经足够。</td>
+            </tr>
+            <tr>
+              <td>DexPilot 配置来源</td>
+              <td>仓库内固定路径：<code>assets/seres_r11/revo2_*_dexpilot.yml</code> + <code>revo2_*_hand.urdf</code>。</td>
+              <td>配置来自 Isaac Lab 内置 retargeter 数据目录；URDF 通过 <code>retrieve_file_path</code> 从 Nucleus 下载到本地。</td>
+              <td>G1 是 Isaac Lab 已支持的设备/资产生态，R11 属于项目侧集成资产。</td>
+            </tr>
+            <tr>
+              <td>手指 DOF 与命名</td>
+              <td>每手 11 DOF（proximal/distal + thumb）。</td>
+              <td>每手 12 DOF（thumb yaw/pitch/intermediate/distal + 四指 proximal/intermediate）。</td>
+              <td>真实手机构不同，DexPilot/URDF 的 target joints 必然不同。</td>
+            </tr>
+            <tr>
+              <td>action 维度</td>
+              <td>左右腕 7+7 + 手指 22（两手 11+11）。</td>
+              <td>左右腕 7+7 + 手指 24（两手 12+12）。</td>
+              <td>由手指 DOF 决定；同时必须匹配各自 env 的 action space。</td>
+            </tr>
+            <tr>
+              <td>TensorReorderer 的 output_order</td>
+              <td>显式把“proximal/ distal/ thumb”分段拼接。</td>
+              <td>同样分段拼接，但 joint 名与段落不同。</td>
+              <td>为了与 action space 的顺序严格一致，通常必须手写。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>如何抽象成一种写法（推荐拆成 3 层）</h2>
+        <p>把 pipeline builder 抽象时，建议按下面三层拆，避免“抽象过度导致每次都要魔改”。</p>
+        <h3>Layer A：固定骨架（通用）</h3>
+        <ul>
+          <li>输入源：HandsSource / ControllersSource。</li>
+          <li>坐标系对齐：统一接收 <code>world_T_anchor</code> 并调用 <code>.transformed(...)</code>。</li>
+          <li>左右腕：两路 Se3AbsRetargeter。</li>
+          <li>手指：两路 DexHandRetargeter 或 trigger 插值 retargeter。</li>
+          <li>拼 action：TensorReorderer + OutputCombiner。</li>
+        </ul>
+        <h3>Layer B：机器人/手的“资产参数”（换本体就会变）</h3>
+        <ul>
+          <li>EEF frame 对齐参数：<code>target_offset_roll/pitch/yaw</code>（左右手各自一套）。</li>
+          <li>是否 rebase：以及左右 <code>idle_pose(7)</code>。</li>
+          <li>DexPilot YAML 路径、手 URDF 路径。</li>
+          <li>左右手 <code>hand_joint_names</code>（并与 YAML/URDF 一致）。</li>
+        </ul>
+        <h3>Layer C：任务/控制“接口契约”（换任务就会变）</h3>
+        <ul>
+          <li>action layout：一维 action 的维度与顺序（由 env 的 ActionsCfg 决定）。</li>
+          <li>是否需要双臂/单臂，是否要控制腰/头等额外 DOF。</li>
+          <li>是否需要安全约束（速度限幅、workspace clamp、过滤抖动）。</li>
+        </ul>
+        <div class="note">
+          最常见的抽象形态是：写一个 <code>TeleopPipelineParams</code>（纯数据）+ 一个 <code>build_pickplace_pipeline(params)</code>（固定骨架），每个机器人 env_cfg 只负责填 params。
+        </div>
+      </section>
+
+      <section>
+        <h2>什么时候需要改 pipeline？什么时候能复用？</h2>
+        <h3>需要改的典型场景</h3>
+        <ul>
+          <li>换机器人本体导致 EEF frame/手结构变化：需要改 offsets、idle_pose、DexPilot/URDF、hand_joint_names、output_order。</li>
+          <li>换手（Revo2 → Inspire → 夹爪）：手指 DOF/命名变化，必然改 Dex 配置与 action 维度。</li>
+          <li>换遥操模式（手追踪 → 手柄）：输入源从 HandsSource 换 ControllersSource，并且手指控制从 Dex 变成 trigger 插值或别的映射。</li>
+          <li>换任务接口（action space 变化）：比如从双臂改成单臂、从末端位姿改成关节空间控制，output_order 必须重做。</li>
+        </ul>
+        <h3>可以基本复用的典型场景</h3>
+        <ul>
+          <li>任务接口不变（仍是 “左右腕 pose + 手指关节”），只是调 offsets/idle_pose：骨架可复用。</li>
+          <li>同一只手结构，换场景/换奖励/换 reset：pipeline 通常不用动。</li>
+          <li>仅更换资产路径（URDF/YAML 位置变化），关节名与维度不变：只改路径配置即可。</li>
+        </ul>
+        <div class="warn">
+          复用的前提是“接口契约一致”：action 的维度、顺序、frame 语义一致。只要这三件事有一个变了，就算函数还能跑，控制体验也会明显不对。
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
+
