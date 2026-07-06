@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：总览</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：总览</h1>
+    <p>从 skill、workflow、orchestrator、schema/spec 四层理解自动生成 env_cfg 的完整方案。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a class="active" href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>这个文档库解决什么问题</h2>
+        <p>
+          这个目录用于沉淀“AI Agent 自动生成 Isaac Lab <code>pick_place</code> VR/teleop <code>env_cfg</code>”的工程方案。
+          它不是单纯写一个 prompt，而是把 <b>skill 文件</b>、<b>workflow 流程</b>、<b>orchestrator 编排器</b>、<b>schema/spec 约束</b>拆清楚。
+        </p>
+        <div class="grid">
+          <div class="card">
+            <b>Skill</b>
+            <span>可复用的规范资产：schema、prompt、checklist、模板和 examples。</span>
+          </div>
+          <div class="card">
+            <b>Workflow</b>
+            <span>任务状态机：自然语言 → spec builder → schema gate → generator → validation gate。</span>
+          </div>
+          <div class="card">
+            <b>Orchestrator</b>
+            <span>执行控制层：选 skill、调用 AI API、维护对话状态、强制校验、决定是否进入下一步。</span>
+          </div>
+          <div class="card">
+            <b>Spec</b>
+            <span>结构化需求说明书：把用户零散自然语言变成可验证、可追溯、可复用的输入。</span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>推荐阅读顺序</h2>
+        <ol>
+          <li><a href="./architecture.html">架构分层</a>：先搞清楚 skill / workflow / orchestrator / AI API 的边界。</li>
+          <li><a href="./schema_spec.html">Schema / Spec</a>：理解为什么先补齐 spec，schema 到底约束什么。</li>
+          <li><a href="./workflow.html">Workflow</a>：理解两阶段流程：Spec Builder 和 Generator。</li>
+          <li><a href="./orchestrator.html">Orchestrator</a>：理解成熟 skill 为什么能“自动选中并读取 schema”。</li>
+          <li><a href="./skill_files.html">Skill 文件</a>：看当前 repo 里哪些文件是执行材料，哪些是学习文档。</li>
+          <li><a href="./roadmap.html">落地路线</a>：从当前最小雏形到产品化入口应该怎么推进。</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>当前第一阶段范围</h2>
+        <ul>
+          <li>只做 IsaacLab 仓库里已经封装好的 humanoid / 类 humanoid 机器人预设。</li>
+          <li>先聚焦 <code>manager_based/manipulation/pick_place</code>，不一开始泛化所有任务类型。</li>
+          <li>先做可控的生成闭环：补齐 spec、校验、生成 env_cfg、注册任务、输出启动命令。</li>
+          <li>暂不做“用户只给 USD，自动生成 URDF / robot cfg / retargeting 资产”的 skill；这属于后续独立能力。</li>
+        </ul>
+        <div class="note">
+          当前可执行雏形在 <code>../env_cfg_skills/orchestrator.py</code>；schema 在 <code>../env_cfg_skills/schemas/pick_place_vr_spec.schema.yml</code>。
+        </div>
+      </section>
+
+    </div>
+  </main>
+</body>
+</html>

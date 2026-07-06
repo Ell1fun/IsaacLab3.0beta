@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：Schema / Spec</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：Schema / Spec</h1>
+    <p>解释 schema 如何约束 spec，以及为什么要先补齐结构化需求再生成代码。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a class="active" href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>Schema 和 Spec 的关系</h2>
+        <p>
+          <code>spec</code> 是 <b>specification</b> 的缩写，表示“规格/需求说明”。
+          在这里，<code>PickPlaceVRSpec</code> 是一个结构化任务需求说明书；<code>schema</code> 是约束这份说明书长什么样的规则。
+        </p>
+        <table>
+          <thead><tr><th>概念</th><th>作用</th><th>例子</th></tr></thead>
+          <tbody>
+            <tr><td><b>Schema</b></td><td>定义字段、类型、枚举、必填/可选、条件必填。</td><td><code>pick_place_vr_spec.schema.yml</code></td></tr>
+            <tr><td><b>Spec</b></td><td>一次具体任务的结构化输入，必须满足 schema。</td><td><code>robot.preset: unitree_g1_inspire_ftp</code></td></tr>
+            <tr><td><b>Gap Analysis</b></td><td>对照 schema 找缺失字段，并转成追问。</td><td>缺 <code>eef_link_names</code> 就问用户左右 EEF link。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Schema 负责约束什么</h2>
+        <ul>
+          <li>允许哪些字段，例如 <code>robot</code>、<code>scene</code>、<code>object</code>、<code>target</code>、<code>control</code>。</li>
+          <li>字段类型是什么，例如字符串、数字、布尔、数组、pose7。</li>
+          <li>哪些字段是必填，例如 <code>robot.preset</code>、<code>scene.table</code>、<code>control.mode</code>。</li>
+          <li>哪些值允许出现，例如 <code>robot.preset</code> 只能选当前支持的人形机器人预设。</li>
+          <li>条件必填，例如启用 teleop 时必须补齐 <code>world_T_anchor</code> 和 idle wrist pose。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>当前支持的人形机器人预设</h2>
+        <table>
+          <thead><tr><th>robot.preset</th><th>robot cfg</th><th>定位</th></tr></thead>
+          <tbody>
+            <tr><td><code>seres_r11_a2_high_pd</code></td><td><code>isaaclab_assets.robots.seres_r11:R11_A2_HIGH_PD_CFG</code></td><td>R11 pick_place / VR teleop 样例基础。</td></tr>
+            <tr><td><code>fourier_gr1t2_high_pd</code></td><td><code>isaaclab_assets.robots.fourier:GR1T2_HIGH_PD_CFG</code></td><td>GR1T2 pick_place 基线。</td></tr>
+            <tr><td><code>unitree_g1_inspire_ftp</code></td><td><code>isaaclab_assets.robots.unitree:G1_INSPIRE_FTP_CFG</code></td><td>G1 + Inspire 手部样例基础。</td></tr>
+            <tr><td><code>unitree_g1</code></td><td><code>isaaclab_assets.robots.unitree:G1_CFG</code></td><td>G1 人形本体。</td></tr>
+            <tr><td><code>unitree_h1</code></td><td><code>isaaclab_assets.robots.unitree:H1_CFG</code></td><td>H1 人形本体。</td></tr>
+            <tr><td><code>mujoco_humanoid</code></td><td><code>isaaclab_assets.robots.humanoid:HUMANOID_CFG</code></td><td>经典 humanoid 示例。</td></tr>
+            <tr><td><code>mujoco_humanoid_28</code></td><td><code>isaaclab_assets.robots.humanoid_28:HUMANOID_28_CFG</code></td><td>28-DOF humanoid 示例。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Spec Builder 的目标</h2>
+        <p>Spec Builder 不负责写代码，它只负责把用户自然语言逐步补齐成一份能通过 schema 校验的 spec。</p>
+        <pre><code>用户：帮我用 G1 做一个 VR pick_place
+  ↓
+AI 生成 spec 草稿
+  ↓
+Schema 校验发现缺 eef_link_names / table usd / object usd
+  ↓
+AI 追问用户
+  ↓
+用户补齐
+  ↓
+Spec 通过 gate，进入 Generator</code></pre>
+      </section>
+
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：Workflow</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：Workflow</h1>
+    <p>把自然语言到 env_cfg 的过程拆成 Spec Builder、Generator 和 Validation Gate。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a class="active" href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>两阶段 Workflow</h2>
+        <p>
+          生成 env_cfg 不建议一步到位。更稳定的方式是两阶段：先补齐 spec，再用 spec 生成代码。
+        </p>
+        <div class="grid">
+          <div class="card">
+            <b>Stage A：Spec Builder</b>
+            <span>自然语言 → 结构化 spec → schema 校验 → 缺字段追问。</span>
+          </div>
+          <div class="card">
+            <b>Stage B：Generator</b>
+            <span>已校验 spec → env_cfg / 注册 / 启动命令 → checklist 验收。</span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>完整流程</h2>
+        <pre><code>1. 接收用户自然语言
+2. Router 选择 skill：pick_place_vr
+3. 加载 schema / prompt / checklist
+4. Spec Builder loop
+   4.1 AI 生成或更新 spec
+   4.2 Orchestrator 用 schema 校验
+   4.3 不通过：把错误转成追问，继续对话
+   4.4 通过：冻结 spec，进入 Generator
+5. Generator
+   5.1 AI 根据 spec 生成 env_cfg 和注册改动
+   5.2 输出 action layout、link/joint 清单、启动命令
+6. Post Validation
+   6.1 检查 import、文件路径、joint/link、action 维度、task 注册
+   6.2 失败则回传错误给 AI 修复
+7. 交付结果</code></pre>
+      </section>
+
+      <section>
+        <h2>Gate 的意义</h2>
+        <p>
+          Gate 是“不能跳过的检查点”。它把 AI 的自由生成限制在可控范围内。
+        </p>
+        <table>
+          <thead><tr><th>Gate</th><th>检查对象</th><th>失败后怎么处理</th></tr></thead>
+          <tbody>
+            <tr><td><b>Schema Gate</b></td><td>Spec 是否满足 schema。</td><td>不进入代码生成，转成追问让用户补齐。</td></tr>
+            <tr><td><b>Asset Gate</b></td><td>robot cfg、USD/URDF、link/joint 是否存在。</td><td>提示缺失文件或名称不匹配。</td></tr>
+            <tr><td><b>Action Gate</b></td><td>teleop pipeline 输出维度是否等于 ActionsCfg 解析维度。</td><td>阻断交付，要求修 action layout。</td></tr>
+            <tr><td><b>Registration Gate</b></td><td>Gym task id 和 env_cfg entry point 是否注册成功。</td><td>修注册文件或启动命令。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+    </div>
+  </main>
+</body>
+</html>

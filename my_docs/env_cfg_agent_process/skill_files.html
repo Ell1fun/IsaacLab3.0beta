@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：Skill 文件</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：Skill 文件</h1>
+    <p>梳理 env_cfg_skills 中每类文件的职责与后续应补齐的材料。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a class="active" href="./skill_files.html">Skill 文件</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>目录分工</h2>
+        <p>现在有两个相关目录：一个用于学习沉淀，一个用于 skill 执行材料。</p>
+        <table>
+          <thead><tr><th>路径</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td><code>my_docs/env_cfg_agent_process</code></td><td>知识库：解释概念、流程、架构、伪代码和路线图。</td></tr>
+            <tr><td><code>my_docs/env_cfg_skills</code></td><td>执行材料：schema、prompt、orchestrator、后续 checklist/examples。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>当前已有文件</h2>
+        <table>
+          <thead><tr><th>文件</th><th>作用</th></tr></thead>
+          <tbody>
+            <tr><td><code>env_cfg_skills/schemas/pick_place_vr_spec.schema.yml</code></td><td>PickPlaceVRSpec 的结构约束。</td></tr>
+            <tr><td><code>env_cfg_skills/prompts/env_cfg_generator.md</code></td><td>当前已有的 env_cfg 生成 prompt 雏形。</td></tr>
+            <tr><td><code>env_cfg_skills/orchestrator.py</code></td><td>最小 orchestrator：路由、模板、校验、generate 占位。</td></tr>
+            <tr><td><code>env_cfg_agent_process/schemas/pick_place_vr_spec.schema.yml</code></td><td>schema 的知识库备份/学习版本。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>建议补齐的执行材料</h2>
+        <ul>
+          <li><code>prompts/pick_place_vr_spec_builder.md</code>：规定如何把自然语言变成 spec，并如何做 gap analysis。</li>
+          <li><code>prompts/pick_place_vr_generator.md</code>：规定如何从已校验 spec 生成 env_cfg 和注册改动。</li>
+          <li><code>checklists/post_generation_validation.md</code>：生成后校验清单。</li>
+          <li><code>examples/r11_pick_place_hand_tracking/input.yml</code>：R11 示例 spec。</li>
+          <li><code>examples/g1_pick_place_hand_tracking/input.yml</code>：G1 示例 spec。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>一个 skill 应该包含什么</h2>
+        <pre><code>env_cfg_skills/
+  orchestrator.py
+  schemas/
+    pick_place_vr_spec.schema.yml
+  prompts/
+    pick_place_vr_spec_builder.md
+    pick_place_vr_generator.md
+  checklists/
+    post_generation_validation.md
+  examples/
+    r11_pick_place_hand_tracking/
+      input.yml
+      expected_summary.md
+    g1_pick_place_hand_tracking/
+      input.yml
+      expected_summary.md</code></pre>
+      </section>
+
+    </div>
+  </main>
+</body>
+</html>

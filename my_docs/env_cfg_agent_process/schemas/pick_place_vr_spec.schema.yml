@@ -1,0 +1,366 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://isaaclab.local/schemas/pick_place_vr_spec.schema.yml
+title: PickPlaceVRSpec
+type: object
+additionalProperties: false
+required:
+  - spec_version
+  - task
+  - robot
+  - scene
+  - object
+  - target
+  - control
+properties:
+  spec_version:
+    type: string
+    enum:
+      - 0.1
+  task:
+    type: object
+    additionalProperties: false
+    required:
+      - family
+    properties:
+      family:
+        type: string
+        enum:
+          - manager_based/manipulation/pick_place
+      variant:
+        type: string
+        minLength: 1
+      notes:
+        type: string
+  robot:
+    type: object
+    additionalProperties: false
+    required:
+      - preset
+      - eef_link_names
+    properties:
+      preset:
+        type: string
+        enum:
+          - seres_r11_a2_high_pd
+          - fourier_gr1t2_high_pd
+          - unitree_g1_inspire_ftp
+          - unitree_g1
+          - unitree_h1
+          - mujoco_humanoid
+          - mujoco_humanoid_28
+      robot_cfg_import:
+        type: string
+        minLength: 1
+        description: "例如：isaaclab_assets.robots.unitree:G1_CFG"
+      usd_path:
+        type: string
+        minLength: 1
+      urdf_path:
+        type: string
+        minLength: 1
+      base_link_name:
+        type: string
+        minLength: 1
+      eef_link_names:
+        type: object
+        additionalProperties: false
+        required:
+          - left
+          - right
+        properties:
+          left:
+            type: string
+            minLength: 1
+          right:
+            type: string
+            minLength: 1
+      controlled_joint_names:
+        type: array
+        items:
+          type: string
+          minLength: 1
+        minItems: 0
+      hand_joint_names:
+        type: array
+        items:
+          type: string
+          minLength: 1
+        minItems: 0
+      fixed_base:
+        type: boolean
+      init_state:
+        type: object
+        additionalProperties: false
+        properties:
+          base_pose:
+            $ref: "#/$defs/pose7"
+          joint_pos:
+            type: object
+            additionalProperties:
+              type: number
+          joint_vel:
+            type: object
+            additionalProperties:
+              type: number
+      idle_wrist_pose:
+        type: object
+        additionalProperties: false
+        properties:
+          left:
+            $ref: "#/$defs/pose7"
+          right:
+            $ref: "#/$defs/pose7"
+  scene:
+    type: object
+    additionalProperties: false
+    required:
+      - ground
+      - table
+    properties:
+      ground:
+        type: object
+        additionalProperties: false
+        required:
+          - kind
+        properties:
+          kind:
+            type: string
+            enum:
+              - ground_plane
+              - usd
+          usd_path:
+            type: string
+            minLength: 1
+          pose:
+            $ref: "#/$defs/pose7"
+      table:
+        type: object
+        additionalProperties: false
+        required:
+          - usd_path
+          - pose
+        properties:
+          usd_path:
+            type: string
+            minLength: 1
+          pose:
+            $ref: "#/$defs/pose7"
+          scale:
+            $ref: "#/$defs/vec3"
+      lights:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required:
+            - kind
+          properties:
+            kind:
+              type: string
+              enum:
+                - dome
+                - distant
+                - rect
+            intensity:
+              type: number
+            color:
+              $ref: "#/$defs/vec3"
+            pose:
+              $ref: "#/$defs/pose7"
+  object:
+    type: object
+    additionalProperties: false
+    required:
+      - usd_path
+      - pose
+    properties:
+      usd_path:
+        type: string
+        minLength: 1
+      pose:
+        $ref: "#/$defs/pose7"
+      scale:
+        $ref: "#/$defs/vec3"
+      mass:
+        type: number
+        minimum: 0.0
+      single_rigid_body:
+        type: boolean
+  target:
+    type: object
+    additionalProperties: false
+    required:
+      - pose
+    properties:
+      pose:
+        $ref: "#/$defs/pose7"
+      randomization:
+        type: object
+        additionalProperties: false
+        properties:
+          pos_range:
+            $ref: "#/$defs/vec3"
+          yaw_range_rad:
+            type: number
+            minimum: 0.0
+      success:
+        type: object
+        additionalProperties: false
+        properties:
+          pos_threshold_m:
+            type: number
+            minimum: 0.0
+          require_orientation:
+            type: boolean
+          rot_threshold_deg:
+            type: number
+            minimum: 0.0
+  control:
+    type: object
+    additionalProperties: false
+    required:
+      - mode
+      - teleop
+    properties:
+      mode:
+        type: string
+        enum:
+          - pink_ik
+          - joint_position
+          - torque
+          - motion_controller
+      gravity_compensation:
+        type: boolean
+      teleop:
+        type: object
+        additionalProperties: false
+        required:
+          - enabled
+        properties:
+          enabled:
+            type: boolean
+          input_source:
+            type: string
+            enum:
+              - openxr_hand_tracking
+              - openxr_controller
+              - keyboard_debug
+          world_T_anchor:
+            $ref: "#/$defs/pose7"
+          wrist_offset:
+            type: object
+            additionalProperties: false
+            properties:
+              left:
+                $ref: "#/$defs/pose7"
+              right:
+                $ref: "#/$defs/pose7"
+          rebase:
+            type: boolean
+          hand:
+            type: object
+            additionalProperties: false
+            properties:
+              mode:
+                type: string
+                enum:
+                  - dexpilot
+                  - trigger_open_close
+                  - none
+              dexpilot_config_path:
+                type: string
+                minLength: 1
+  mdp:
+    type: object
+    additionalProperties: false
+    properties:
+      terminations:
+        type: object
+        additionalProperties: false
+        properties:
+          timeout_s:
+            type: number
+            minimum: 0.0
+          object_dropped:
+            type: boolean
+          success:
+            type: boolean
+      rewards:
+        type: object
+        additionalProperties: false
+        properties:
+          enabled:
+            type: boolean
+allOf:
+  - if:
+      properties:
+        control:
+          properties:
+            teleop:
+              properties:
+                enabled:
+                  const: true
+    then:
+      properties:
+        control:
+          required:
+            - teleop
+          properties:
+            teleop:
+              required:
+                - input_source
+                - world_T_anchor
+      required:
+        - robot
+      properties:
+        robot:
+          required:
+            - idle_wrist_pose
+          properties:
+            idle_wrist_pose:
+              required:
+                - left
+                - right
+  - if:
+      properties:
+        control:
+          properties:
+            teleop:
+              properties:
+                hand:
+                  properties:
+                    mode:
+                      const: dexpilot
+    then:
+      properties:
+        control:
+          properties:
+            teleop:
+              properties:
+                hand:
+                  required:
+                    - dexpilot_config_path
+$defs:
+  vec3:
+    type: array
+    minItems: 3
+    maxItems: 3
+    items:
+      type: number
+  quat_xyzw:
+    type: array
+    minItems: 4
+    maxItems: 4
+    items:
+      type: number
+  pose7:
+    type: object
+    additionalProperties: false
+    required:
+      - pos
+      - quat_xyzw
+    properties:
+      pos:
+        $ref: "#/$defs/vec3"
+      quat_xyzw:
+        $ref: "#/$defs/quat_xyzw"

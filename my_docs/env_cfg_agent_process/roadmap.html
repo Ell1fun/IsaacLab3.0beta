@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：落地路线</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：落地路线</h1>
+    <p>从当前最小雏形到成熟产品化 skill 的推进计划。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a class="active" href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>当前状态</h2>
+        <ul>
+          <li>已经有 PickPlaceVRSpec schema。</li>
+          <li>已经有最小 orchestrator：route / template / validate / generate。</li>
+          <li>已经明确第一阶段支持 IsaacLab 仓库内封装好的人形机器人预设。</li>
+          <li>已经明确成熟形态需要 AI API、会话状态、schema gate、post validation gate。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>下一步优先级</h2>
+        <ol>
+          <li>补 <code>pick_place_vr_spec_builder.md</code>：定义自然语言到 spec 的补齐规则。</li>
+          <li>补 <code>pick_place_vr_generator.md</code>：定义 spec 到 env_cfg 的生成规则。</li>
+          <li>补 <code>post_generation_validation.md</code>：定义生成后的检查清单。</li>
+          <li>补 R11/G1 examples：用真实任务反推 schema 是否够用。</li>
+          <li>把 orchestrator 的 API 分支从 raw 输出升级为：解析 spec → schema 校验 → 追问循环。</li>
+          <li>再实现 env_cfg 写文件、注册 task、运行静态检查。</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>产品化路线</h2>
+        <table>
+          <thead><tr><th>阶段</th><th>目标</th><th>交付物</th></tr></thead>
+          <tbody>
+            <tr><td><b>V0</b></td><td>本地理解和验证流程。</td><td>schema + 文档 + CLI orchestrator。</td></tr>
+            <tr><td><b>V1</b></td><td>接入 AI API，能对话补齐 spec。</td><td>spec_builder_loop + schema gate。</td></tr>
+            <tr><td><b>V2</b></td><td>能从 spec 生成 env_cfg 并注册任务。</td><td>generator + post validation。</td></tr>
+            <tr><td><b>V3</b></td><td>接入 Chat UI / IDE 插件 / 服务端。</td><td>常驻 orchestrator + 多用户会话状态。</td></tr>
+            <tr><td><b>V4</b></td><td>支持用户自带 USD 的机器人接入。</td><td>新的 asset-to-robot-cfg skill。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>当前不做的事</h2>
+        <ul>
+          <li>不从零生成机器人 URDF / robot cfg。</li>
+          <li>不自动猜 joint/link/EEF。</li>
+          <li>不把 API Key 写进 repo。</li>
+          <li>不跳过 schema gate 直接生成代码。</li>
+        </ul>
+      </section>
+
+    </div>
+  </main>
+</body>
+</html>

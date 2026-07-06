@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：Orchestrator</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：Orchestrator</h1>
+    <p>解释 orchestrator 如何选择 skill、调用 AI API、维护状态并强制校验。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a class="active" href="./orchestrator.html">Orchestrator</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>Orchestrator 的作用</h2>
+        <p>
+          Orchestrator 是模型外的执行控制层。它不等于 AI 模型，也不等于 prompt；它负责把用户输入、skill 文件、AI API、schema 校验、文件落盘串成稳定流程。
+        </p>
+        <ul>
+          <li>维护 skill registry：知道有哪些 skill、触发词是什么、schema/prompt/checklist 在哪里。</li>
+          <li>执行 router：把用户自然语言路由到合适的 skill。</li>
+          <li>调用 AI API：把 schema/prompt/spec 组装成消息发给模型。</li>
+          <li>保存会话状态：维护当前 spec 草稿、用户补充信息、校验错误。</li>
+          <li>强制 gate：schema 不通过就不能进入 generator；post validation 不通过就不能交付。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>当前最小实现</h2>
+        <p>当前仓库里有一个最小示例：</p>
+        <ul>
+          <li><code>../env_cfg_skills/orchestrator.py</code></li>
+        </ul>
+        <table>
+          <thead><tr><th>命令</th><th>作用</th></tr></thead>
+          <tbody>
+            <tr><td><code>route</code></td><td>根据用户自然语言选择 skill，并返回 schema/prompt 路径。</td></tr>
+            <tr><td><code>template</code></td><td>输出一个 starter spec 模板。</td></tr>
+            <tr><td><code>validate</code></td><td>用 schema 校验一个 spec 文件。</td></tr>
+            <tr><td><code>generate</code></td><td>演示 spec builder → schema gate 的入口；默认不调用 API，<code>--enable_api</code> 才尝试调用。</td></tr>
+          </tbody>
+        </table>
+        <pre><code>python my_docs/env_cfg_skills/orchestrator.py route "帮我做一个 pick_place VR teleop env_cfg"
+python my_docs/env_cfg_skills/orchestrator.py template --skill pick_place_vr --format yml
+python my_docs/env_cfg_skills/orchestrator.py validate --skill pick_place_vr --spec /path/to/spec.yml
+python my_docs/env_cfg_skills/orchestrator.py generate "帮我做一个 pick_place VR teleop env_cfg"</code></pre>
+      </section>
+
+      <section>
+        <h2>AI API 与 API Key</h2>
+        <p>
+          产品化时，orchestrator 会在后台调用一个 AI API。这个 API 通常需要 API Key。
+          密钥不应该写进 prompt、schema 或 repo 文件，而应该从环境变量或密钥服务读取。
+        </p>
+        <pre><code>export ENV_CFG_LLM_API_KEY=你的密钥
+export ENV_CFG_LLM_API_BASE_URL=https://你的模型服务地址
+export ENV_CFG_LLM_MODEL=你的模型名
+
+python my_docs/env_cfg_skills/orchestrator.py generate "..." --enable_api</code></pre>
+        <div class="warn">当前 API 分支只是接口占位，完整产品化还需要把模型 raw 输出解析成 spec、循环校验并追问用户。</div>
+      </section>
+
+      <section>
+        <h2>中文伪代码</h2>
+        <pre><code>输入：user_message
+
+orchestrator.handle_message(user_message):
+  skill = router.route(user_message, registry)
+  assets = registry.load(skill)  # schema / prompt / checklist
+
+  spec = state.get_or_create_draft_spec(skill)
+
+  while True:
+    spec_candidate = llm_api.chat(
+      system=assets.spec_builder_prompt + assets.schema,
+      user=user_message,
+      state=spec
+    )
+
+    errors = json_schema_validate(assets.schema, spec_candidate)
+    if errors:
+      questions = convert_errors_to_questions(errors)
+      user_message = ask_user(questions)
+      spec = merge(spec, spec_candidate)
+      continue
+
+    spec = spec_candidate
+    break
+
+  code = llm_api.chat(
+    system=assets.generator_prompt + assets.checklist,
+    user=render(spec)
+  )
+
+  write_files(code)
+  report = run_post_validation(code, assets.checklist)
+
+  if report.failed:
+    fix = llm_api.chat(system=assets.fixer_prompt, user=report + code)
+    apply_fix(fix)
+
+  return deliver(code, report)</code></pre>
+      </section>
+
+    </div>
+  </main>
+</body>
+</html>

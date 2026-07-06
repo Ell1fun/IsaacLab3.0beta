@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：架构分层</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：架构分层</h1>
+    <p>解释成熟 skill 背后的用户入口、orchestrator、workflow、skill 和 AI API 的边界。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a class="active" href="./architecture.html">架构分层</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>四层架构</h2>
+        <p>成熟的 agent skill 不是“一个 prompt 解决所有事”，而是分成四层。</p>
+        <table>
+          <thead><tr><th>层</th><th>职责</th><th>在本项目中的落点</th></tr></thead>
+          <tbody>
+            <tr><td><b>用户入口</b></td><td>接收自然语言需求，可以是 Chat UI、IDE 插件、API、CLI。</td><td>当前用 CLI 演示；未来可以接服务端或 IDE。</td></tr>
+            <tr><td><b>Orchestrator</b></td><td>路由选 skill、加载材料、调用 AI API、保存会话状态、强制 gate。</td><td><code>env_cfg_skills/orchestrator.py</code></td></tr>
+            <tr><td><b>Workflow</b></td><td>定义流程顺序和状态机：补齐 spec，再生成代码，再验收。</td><td>写在 orchestrator 的执行逻辑和文档流程里。</td></tr>
+            <tr><td><b>Skill</b></td><td>提供可复用材料：schema、prompt、checklist、示例和模板。</td><td><code>env_cfg_skills/</code> 目录。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>三者边界：Skill / Workflow / Orchestrator</h2>
+        <div class="grid">
+          <div class="card">
+            <b>Skill 是材料</b>
+            <span>告诉系统“允许什么、怎么生成、怎么验收”。它不负责自己运行。</span>
+          </div>
+          <div class="card">
+            <b>Workflow 是流程</b>
+            <span>告诉系统“先做什么、后做什么、什么时候允许进入下一步”。</span>
+          </div>
+          <div class="card">
+            <b>Orchestrator 是执行器</b>
+            <span>真正调用 AI API、读取文件、校验 schema、追问用户、写文件。</span>
+          </div>
+          <div class="card">
+            <b>AI API 是生成器</b>
+            <span>负责理解自然语言和生成文本/代码，但不应该负责流程 gate。</span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>成熟 skill 为什么看起来能“自动触发”</h2>
+        <p>
+          用户看到的是“我说一句话，AI 自动用了某个 skill”。实际背后通常是：平台先用 router 选中 skill，再把该 skill 的 schema/prompt 注入模型调用，并在程序侧做校验。
+        </p>
+        <pre><code>用户自然语言
+  ↓
+Router 选择 skill
+  ↓
+加载 skill assets（schema / prompt / checklist）
+  ↓
+调用 AI API
+  ↓
+Schema / checklist gate
+  ↓
+返回结果或继续追问</code></pre>
+        <div class="warn">模型本身不会凭空读取你的 repo 文件。必须由 orchestrator 或平台把 skill 注册并加载给模型。</div>
+      </section>
+
+    </div>
+  </main>
+</body>
+</html>
