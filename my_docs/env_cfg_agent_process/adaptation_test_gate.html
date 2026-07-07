@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：Adaptation 与 Test Gate</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：Adaptation 与 Test Gate</h1>
+    <p>说明 exact template、template adaptation、unsupported 三档路由，以及为什么用自动测试 gate 替代人工核查。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a href="./architecture_evolution.html">开发演进</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./orchestrator_code.html">代码导读</a>
+      <a href="./module_flow.html">模块与流程图</a>
+      <a class="active" href="./adaptation_test_gate.html">Adaptation / Test Gate</a>
+      <a href="./preset_enrichment.html">Preset Enrichment</a>
+      <a href="./template_generator.html">Template Generator</a>
+      <a href="./placement_workflow.html">Placement Workflow</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>核心原则</h2>
+        <p>
+          生产工程里不应该让 AI 随意写最终 env_cfg。当前策略是：
+          <b>能精确匹配模板就不用 AI；缺模板时 AI 只生成 adaptation_spec；
+          最终 Python 文件由程序确定性生成，并必须通过自动测试 gate。</b>
+        </p>
+      </section>
+
+      <section>
+        <h2>三档路由</h2>
+        <table>
+          <thead><tr><th>级别</th><th>触发条件</th><th>行为</th><th>是否写文件</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Level 1: Exact Template</td>
+              <td>robot、object、input_source 都能在 presets/template 中精确匹配。</td>
+              <td>直接走 deterministic template generator，不调用 AI。</td>
+              <td>通过自动 tests 后，dry-run 输出路径；带 <code>--write</code> 才写文件。</td>
+            </tr>
+            <tr>
+              <td>Level 2: Adaptation Candidate</td>
+              <td>robot/object 存在，但当前 robot 没有该 input_source 模板；仓库里存在其他 robot 的同 input_source 参考模板。</td>
+              <td>输出 adaptation candidate；启用 API 时让 AI 生成 adaptation_spec，再由程序生成 candidate env_cfg。</td>
+              <td>默认不写。只有 candidate env_cfg 自动 tests 全通过，才允许 dry-run 或 <code>--write</code>。</td>
+            </tr>
+            <tr>
+              <td>Level 3: Unsupported</td>
+              <td>robot preset、object preset、参考 input_source 或基础资产缺失。</td>
+              <td>阻断，进入后续独立 asset onboarding skill。</td>
+              <td>不写。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>G1 + Motion Controller 的当前行为</h2>
+        <p>
+          当 prompt 是“宇树 G1 motion controller 抓水瓶”时，local parser 会得到：
+          <code>robot.preset=unitree_g1_inspire_ftp</code>、
+          <code>object.preset=bottled_water_c01</code>、
+          <code>control.teleop.input_source=openxr_controller</code>。
+        </p>
+        <p>
+          之后 generator 会检查 <code>unitree_g1_inspire_ftp.supported_teleop_templates.openxr_controller</code>。
+          当前没有这个模板，所以不会误用 G1 handtracking 模板。不开 API 时只输出 adaptation candidate；
+          开启 <code>--enable_api</code> 时，会让模型输出 <code>adaptation_spec</code>，再由程序确定性生成候选 env_cfg。
+        </p>
+        <pre><code>blocked: true
+reason: 没有 exact template: robot=unitree_g1_inspire_ftp, input_source=openxr_controller
+generator_mode: adaptation_candidate
+adaptation_candidate:
+  requested_robot: unitree_g1_inspire_ftp
+  requested_input_source: openxr_controller
+  reference_template:
+    robot_preset: seres_r11_a2_high_pd
+    module: pickplace_seres_r11_tri_env_cfg
+    class: PickPlaceR11TriEnvCfg</code></pre>
+      </section>
+
+      <section>
+        <h2>代码位置</h2>
+        <p>
+          当前它们还不是两个独立的 skill，而是 <code>pick_place_vr</code> skill 里的两个 workflow 模块。
+          这样做是为了先把闭环跑通：用户 prompt 进入同一个 orchestrator，由 pipeline 决定走 exact template、AI adaptation，还是 validation gate。
+        </p>
+        <table>
+          <thead><tr><th>能力</th><th>当前代码位置</th><th>职责</th><th>后续是否可拆成 skill</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>G1 motion controller adaptation</td>
+              <td><code>env_cfg_skills/generator_workflow.py</code></td>
+              <td>
+                <code>run_adaptation_generator_workflow()</code> 在没有 exact template 且 <code>--enable_api</code> 打开时触发；
+                它读取 <code>prompts/pick_place_vr_template_adaptation.md</code>，
+                再把 G1 handtracking、G1 controller 参考、R11 tri motion controller 参考抽成结构化片段包，连同 spec 发给模型；
+                模型只返回 <code>adaptation_spec</code>，Python env_cfg 由 workflow 确定性渲染。
+              </td>
+              <td>可以，后续可拆成 <code>template_adaptation</code> skill。</td>
+            </tr>
+            <tr>
+              <td>自动 validation / test gate</td>
+              <td><code>env_cfg_skills/post_generation_tests.py</code></td>
+              <td>
+                <code>run_post_generation_tests()</code> 在写文件前执行；
+                候选 env_cfg 语法不对、包含 TODO、注册缺 task id、命令不可复制都会被拦截。
+              </td>
+              <td>可以，后续可拆成 <code>env_cfg_validation</code> skill。</td>
+            </tr>
+            <tr>
+              <td>总调度</td>
+              <td><code>env_cfg_skills/pipeline.py</code></td>
+              <td>
+                <code>run_generate_pipeline()</code> 负责把 spec builder、generator/adaptation 和 validation gate 串起来。
+              </td>
+              <td>不建议拆成 skill，它更像 orchestrator 内部 workflow。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>为什么做结构化抽取</h2>
+        <p>
+          最早的 adaptation 做法是把两份 env_cfg 全文发给模型。这样上下文接近两万 tokens，API 容易变慢；
+          如果简单 truncate，又可能刚好截掉 controller pipeline、retargeter、output reorder 这些关键代码。
+          所以现在改成 <b>structured snippets</b>：不截断全文，而是用 AST 抽取和迁移相关的 import、class、function、常量片段。
+        </p>
+        <table>
+          <thead><tr><th>方式</th><th>问题</th><th>当前选择</th></tr></thead>
+          <tbody>
+            <tr><td>整份 env_cfg 全文</td><td>tokens 多、请求慢、模型注意力分散。</td><td>不用作主路径。</td></tr>
+            <tr><td>固定长度截断</td><td>可能截掉关键 pipeline，导致模型误判无法迁移。</td><td>不再默认使用。</td></tr>
+            <tr><td>结构化片段抽取</td><td>需要维护抽取规则。</td><td>当前采用：保留 EnvCfg、teleop、pipeline、controller、source、retargeter、action、hand、trigger 等相关 symbol。</td></tr>
+          </tbody>
+        </table>
+        <pre><code>generator_workflow.extract_env_cfg_adaptation_context(...)
+  - ast.parse(env_cfg_source)
+  - 保留 imports
+  - 保留相关 class/function/constant
+  - 输出 source_path / source_chars / extracted_chars / symbols
+  ↓
+build_adaptation_messages(...)
+  - prompt
+  - spec
+  - requested_robot_existing_reference_env_cfg_context
+  - same_input_source_reference_env_cfg_context</code></pre>
+      </section>
+
+      <section>
+        <h2>R11 Motion Controller 参考源选择</h2>
+        <p>
+          R11 当前有两份 motion controller 相关参考：
+          <code>pickplace_seres_r11_env_cfg.py</code> 现在只保留 R11 hand tracking 主任务；
+          <code>pickplace_seres_r11_tri_env_cfg.py</code> 里把 controller retargeter、trigger/squeeze、手部 open/closed pose、TensorReorderer 说明得更完整。
+        </p>
+        <p>
+          因此 workflow 现在统一为：
+          <b>所有 R11 motion controller 的运行入口和 adaptation 参考材料都使用 <code>pickplace_seres_r11_tri_env_cfg.py</code></b>。
+          这样避免同一个输入源在两个文件里维护两套实现。
+        </p>
+        <pre><code>robot_presets.yml:
+  seres_r11_a2_high_pd:
+    supported_teleop_templates:
+      openxr_controller:
+        module: pickplace_seres_r11_tri_env_cfg
+        class: PickPlaceR11TriEnvCfg
+        adaptation_reference_env_cfg: pickplace_seres_r11_tri_env_cfg.py
+        adaptation_reference_class: PickPlaceR11TriEnvCfg</code></pre>
+      </section>
+
+      <section>
+        <h2>Prompt 和 Workflow 的边界</h2>
+        <p>
+          adaptation 的模型提示词现在放在 <code>env_cfg_skills/prompts/pick_place_vr_template_adaptation.md</code>。
+          这属于 skill 的可维护资产；<code>generator_workflow.py</code> 只负责读取 prompt、拼接上下文、调用模型和解析输出。
+        </p>
+        <table>
+          <thead><tr><th>部分</th><th>放在哪里</th><th>负责什么</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Prompt</td>
+              <td><code>prompts/pick_place_vr_template_adaptation.md</code></td>
+              <td>告诉模型迁移规则、输出 JSON 格式、禁止 TODO/伪代码、无法安全迁移时输出 <code>blocked_reason</code>。</td>
+            </tr>
+            <tr>
+              <td>Workflow</td>
+              <td><code>generator_workflow.py</code></td>
+              <td>判断什么时候需要 adaptation，读取 prompt，抽取参考 env_cfg 片段，注入 spec 和结构化上下文，调用模型。</td>
+            </tr>
+            <tr>
+              <td>Validation</td>
+              <td><code>post_generation_tests.py</code></td>
+              <td>程序渲染候选 env_cfg 后，检查语法、TODO、注册、命令，以及 G1 trigger hand joint coverage，决定能不能写文件。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>G1 Trigger 合拢策略</h2>
+        <p>
+          对 <code>G1 + motion controller</code>，模型不再直接写 Python。模型只输出
+          <code>G1MotionControllerAdaptationSpec</code>，其中最关键的是 wrist offset 和 24 个 Inspire hand joints 的 open/closed pose。
+          workflow 再生成 <code>G1ControllerTriggerGraspRetargeter</code>：
+        </p>
+        <pre><code>grasp = max(trigger, squeeze)
+joint_value = open_pose[joint] + grasp * (closed_pose[joint] - open_pose[joint])</code></pre>
+        <p>
+          这样用户按 trigger 或 squeeze 时，机器人手会从 open pose 连续插值到 closed pose。
+          <code>post_generation_tests.py</code> 会检查 open/closed pose 是否覆盖全部 24 个 G1 Inspire hand joints，防止模型漏关节。
+        </p>
+      </section>
+
+      <section>
+        <h2>为什么不做人工核查</h2>
+        <p>
+          人工核查容易遗漏 action layout、joint 顺序、retargeter 输入输出、注册路径这类细节。
+          更适合工程化的方式是把验收规则写成 test gate：只要生成文件，就必须先跑自动检查。
+        </p>
+        <table>
+          <thead><tr><th>检查类型</th><th>当前实现</th><th>后续增强</th></tr></thead>
+          <tbody>
+            <tr><td>语法检查</td><td><code>ast.parse</code> 检查生成的 Python 内容。</td><td>进一步执行 <code>py_compile</code> 到临时文件。</td></tr>
+            <tr><td>占位符检查</td><td>禁止生成内容包含 <code>TODO</code>。</td><td>扩展到 link/joint/path 的 known-bad placeholder。</td></tr>
+            <tr><td>注册检查</td><td><code>__init__.py</code> 内容必须包含生成的 <code>gym_id</code>。</td><td>检查 entry point class 是否可 import。</td></tr>
+            <tr><td>命令检查</td><td>teleop command 必须是单行，且包含 <code>--task</code>。</td><td>检查 task id 与注册内容一致。</td></tr>
+            <tr><td>IsaacLab smoke test</td><td>当前列为可选测试计划。</td><td>封装成可执行 skill：无 XR 或 mock XR 下创建 env，验证 action/observation/pipeline。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>自动测试 gate 在代码里的位置</h2>
+        <pre><code>pipeline.run_generate_pipeline(...)
+  ↓
+generator_workflow.run_generator_workflow(...)
+  ↓
+如果 generated.ok == false:
+  - adaptation candidate / unsupported
+  - 不写文件
+  ↓
+post_generation_tests.run_post_generation_tests(...)
+  - Python AST parse
+  - no TODO
+  - registration includes gym_id
+  - command is copyable
+  ↓
+tests 通过？
+  - 是：write_generated_files(...)
+  - 否：阻断，不写文件</code></pre>
+      </section>
+
+      <section>
+        <h2>后续可以封装成独立 skill</h2>
+        <p>
+          这套 test gate 可以继续产品化成独立 skill，例如 <code>env_cfg_validation</code>。
+          它可以接受 generated files 和 spec，自动执行语法、注册、import、dry-run env creation、teleop pipeline mock 等检查。
+        </p>
+        <pre><code>env_cfg_validation skill:
+  输入：
+    - generated env_cfg files
+    - PickPlaceVRSpec
+    - expected task id
+  输出：
+    - pass/fail
+    - failed checks
+    - smoke test logs
+    - 是否允许写入正式 task registry</code></pre>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

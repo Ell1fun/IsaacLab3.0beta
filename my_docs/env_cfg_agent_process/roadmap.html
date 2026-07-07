@@ -17,9 +17,16 @@
       <strong>目录</strong>
       <a href="./index.html">总览</a>
       <a href="./architecture.html">架构分层</a>
+      <a href="./architecture_evolution.html">开发演进</a>
       <a href="./schema_spec.html">Schema / Spec</a>
       <a href="./workflow.html">Workflow</a>
       <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./orchestrator_code.html">代码导读</a>
+      <a href="./module_flow.html">模块与流程图</a>
+      <a href="./adaptation_test_gate.html">Adaptation / Test Gate</a>
+      <a href="./preset_enrichment.html">Preset Enrichment</a>
+      <a href="./template_generator.html">Template Generator</a>
+      <a href="./placement_workflow.html">Placement Workflow</a>
       <a href="./skill_files.html">Skill 文件</a>
       <a class="active" href="./roadmap.html">落地路线</a>
     </nav>
@@ -30,6 +37,8 @@
         <ul>
           <li>已经有 PickPlaceVRSpec schema。</li>
           <li>已经有 Spec Builder prompt 和 Generator prompt。</li>
+          <li>已经有 robot/object presets 和 preset enrichment。</li>
+          <li>已经有面向仓库现有机器人的 template generator。</li>
           <li>已经有 post-generation checklist。</li>
           <li>已经有 R11 / G1 Inspire Hand 示例 spec。</li>
           <li>已经有 orchestrator：route / template / validate / generate / chat。</li>
@@ -42,7 +51,7 @@
         <ol>
           <li>用 R11/G1 现有 env_cfg 继续校准 examples 里的 joint/link/hand joint 顺序。</li>
           <li>把 Spec Builder 的追问从“输出 questions”升级为真正的多轮问答状态管理。</li>
-          <li>把 Generator 输出接入 post-generation checklist 的自动检查。</li>
+          <li>把 Template Generator 输出接入 post-generation checklist 的自动检查。</li>
           <li>实现 task 注册文件的安全 patch，而不是整文件覆盖。</li>
           <li>加入一次真实 dry-run：读取 example spec → 生成 env_cfg payload → checklist 报告。</li>
         </ol>
@@ -55,7 +64,7 @@
           <tbody>
             <tr><td><b>V0</b></td><td>本地理解和验证流程。</td><td>schema + 文档 + CLI orchestrator。</td></tr>
             <tr><td><b>V1</b></td><td>接入 AI API，能对话补齐 spec。</td><td>spec_builder_loop + schema gate。</td></tr>
-            <tr><td><b>V2</b></td><td>能从 spec 生成 env_cfg 并注册任务。</td><td>generator + post validation。</td></tr>
+            <tr><td><b>V2</b></td><td>能从 spec 确定性生成 env_cfg 并注册任务。</td><td>template generator + post validation。</td></tr>
             <tr><td><b>V3</b></td><td>接入 Chat UI / IDE 插件 / 服务端。</td><td>常驻 orchestrator + 多用户会话状态。</td></tr>
             <tr><td><b>V4</b></td><td>支持用户自带 USD 的机器人接入。</td><td>新的 asset-to-robot-cfg skill。</td></tr>
           </tbody>

@@ -17,10 +17,18 @@
       <strong>目录</strong>
       <a class="active" href="./index.html">总览</a>
       <a href="./architecture.html">架构分层</a>
+      <a href="./architecture_evolution.html">开发演进</a>
       <a href="./schema_spec.html">Schema / Spec</a>
       <a href="./workflow.html">Workflow</a>
       <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./orchestrator_code.html">代码导读</a>
+      <a href="./module_flow.html">模块与流程图</a>
+      <a href="./adaptation_test_gate.html">Adaptation / Test Gate</a>
+      <a href="./preset_enrichment.html">Preset Enrichment</a>
+      <a href="./template_generator.html">Template Generator</a>
+      <a href="./placement_workflow.html">Placement Workflow</a>
       <a href="./skill_files.html">Skill 文件</a>
+      <a href="./presets_prompts.html">Presets & Prompts</a>
       <a href="./roadmap.html">落地路线</a>
     </nav>
 
@@ -38,7 +46,7 @@
           </div>
           <div class="card">
             <b>Workflow</b>
-            <span>任务状态机：自然语言 → spec builder → schema gate → generator → validation gate。</span>
+            <span>任务状态机：自然语言 → spec builder → preset enrichment → schema gate → template generator。</span>
           </div>
           <div class="card">
             <b>Orchestrator</b>
@@ -55,10 +63,17 @@
         <h2>推荐阅读顺序</h2>
         <ol>
           <li><a href="./architecture.html">架构分层</a>：先搞清楚 skill / workflow / orchestrator / AI API 的边界。</li>
+          <li><a href="./architecture_evolution.html">开发演进</a>：理解为什么从单文件 orchestrator 演进到 presets、template generator 和模块拆分。</li>
           <li><a href="./schema_spec.html">Schema / Spec</a>：理解为什么先补齐 spec，schema 到底约束什么。</li>
           <li><a href="./workflow.html">Workflow</a>：理解两阶段流程：Spec Builder 和 Generator。</li>
           <li><a href="./orchestrator.html">Orchestrator</a>：理解成熟 skill 为什么能“自动选中并读取 schema”。</li>
+          <li><a href="./orchestrator_code.html">代码导读</a>：逐函数理解 orchestrator.py 的职责和执行链路。</li>
+          <li><a href="./module_flow.html">模块与流程图</a>：用 flowchart 看清每个模块职责，以及什么时候调 AI、什么时候直接用 presets/template。</li>
+          <li><a href="./preset_enrichment.html">Preset Enrichment</a>：理解为什么要用机器人/物体 preset 自动补齐 spec。</li>
+          <li><a href="./template_generator.html">Template Generator</a>：理解 env_cfg 薄封装、task 注册和启动命令如何由代码确定性生成。</li>
+          <li><a href="./placement_workflow.html">Placement Workflow</a>：理解 object.init_state 和 target_pose 如何按机器人工作空间自动计算。</li>
           <li><a href="./skill_files.html">Skill 文件</a>：看当前 repo 里哪些文件是执行材料，哪些是学习文档。</li>
+          <li><a href="./presets_prompts.html">Presets &amp; Prompts</a>：把 presets/ 字段清单与 prompts/ 职责边界一次看清，后续维护不容易跑偏。</li>
           <li><a href="./roadmap.html">落地路线</a>：从当前最小雏形到产品化入口应该怎么推进。</li>
         </ol>
       </section>

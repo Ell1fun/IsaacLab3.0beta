@@ -5,12 +5,15 @@
 ## 1. 文件与 import
 
 - 新 env_cfg 文件路径是否位于正确任务目录。
+- 新 env_cfg 文件路径必须以 `source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/` 开头。
+- 不允许生成到 `source/isaaclab_tasks/manager_based/...`，因为这里少了一层 `isaaclab_tasks`。
 - 所有 import 是否能在当前仓库找到。
 - `robot_cfg_import` 是否存在。
 - task 注册文件是否正确指向新的 env_cfg 类。
 
 ## 2. 资产路径
 
+- spec 是否已经经过 preset enrichment。
 - `object.preset` 是否来自 schema enum。
 - `object.preset` 是否能映射到仓库已知 USD。
 - robot USD/URDF 路径是否存在或来自 IsaacLab/Nucleus 已知路径。
@@ -54,5 +57,7 @@
 - 自动生成 env_cfg 文件名是否使用 `auto_pickplace_..._env_cfg.py`。
 - 自动生成 EnvCfg class 是否使用 `AutoPickPlace...EnvCfg`。
 - 启动命令是否包含正确 task id。
+- 启动命令是否使用 `./isaaclab.sh -p scripts/environments/teleoperation/teleop_se3_agent.py`。
+- 启动命令是否包含 `--visualizer kit`、`--xr`、`--cloudxr_env cloudxrjs`。
 - dry-run 时只输出会写入的文件，不实际写入。
 - `--write` 写入前必须再次确认生成文件清单。

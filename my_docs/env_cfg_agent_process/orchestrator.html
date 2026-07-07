@@ -17,9 +17,16 @@
       <strong>目录</strong>
       <a href="./index.html">总览</a>
       <a href="./architecture.html">架构分层</a>
+      <a href="./architecture_evolution.html">开发演进</a>
       <a href="./schema_spec.html">Schema / Spec</a>
       <a href="./workflow.html">Workflow</a>
       <a class="active" href="./orchestrator.html">Orchestrator</a>
+      <a href="./orchestrator_code.html">代码导读</a>
+      <a href="./module_flow.html">模块与流程图</a>
+      <a href="./adaptation_test_gate.html">Adaptation / Test Gate</a>
+      <a href="./preset_enrichment.html">Preset Enrichment</a>
+      <a href="./template_generator.html">Template Generator</a>
+      <a href="./placement_workflow.html">Placement Workflow</a>
       <a href="./skill_files.html">Skill 文件</a>
       <a href="./roadmap.html">落地路线</a>
     </nav>
@@ -33,7 +40,7 @@
         <ul>
           <li>维护 skill registry：知道有哪些 skill、触发词是什么、schema/prompt/checklist 在哪里。</li>
           <li>执行 router：把用户自然语言路由到合适的 skill。</li>
-          <li>调用 AI API：把 schema/prompt/spec 组装成消息发给模型。</li>
+          <li>按需调用 AI API：本地规则无法补齐 spec 时，才把 schema/prompt/spec 组装成消息发给模型。</li>
           <li>保存会话状态：维护当前 spec 草稿、用户补充信息、校验错误。</li>
           <li>强制 gate：schema 不通过就不能进入 generator；post validation 不通过就不能交付。</li>
         </ul>
@@ -51,7 +58,7 @@
             <tr><td><code>route</code></td><td>根据用户自然语言选择 skill，并返回 schema/prompt 路径。</td></tr>
             <tr><td><code>template</code></td><td>输出一个 starter spec 模板。</td></tr>
             <tr><td><code>validate</code></td><td>用 schema 校验一个 spec 文件。</td></tr>
-            <tr><td><code>generate</code></td><td>执行两个 workflow：先补齐 spec 并通过 schema gate，再根据 spec 生成 env_cfg/注册任务 payload。</td></tr>
+            <tr><td><code>generate</code></td><td>执行 workflow：先补齐 spec 并通过 schema gate，再优先用模板生成 env_cfg/注册任务 payload。</td></tr>
             <tr><td><code>chat</code></td><td>交互式本地 demo：用户启动一次 orchestrator 后，在命令行里连续输入需求和补充信息。</td></tr>
           </tbody>
         </table>
@@ -60,6 +67,22 @@ python my_docs/env_cfg_skills/orchestrator.py template --skill pick_place_vr --f
 python my_docs/env_cfg_skills/orchestrator.py validate --skill pick_place_vr --spec /path/to/spec.yml
 python my_docs/env_cfg_skills/orchestrator.py generate "帮我做一个 pick_place VR teleop env_cfg"
 python my_docs/env_cfg_skills/orchestrator.py chat</code></pre>
+      </section>
+
+      <section>
+        <h2>当前工程决策</h2>
+        <p>
+          对仓库里已有完整 pick_place teleop 模板的机器人，env_cfg 生成不再交给大模型自由发挥，而是走程序模板。
+          大模型最适合做自然语言理解和复杂 spec 补齐；代码生成、注册和启动命令应尽量确定性。
+        </p>
+        <table>
+          <thead><tr><th>场景</th><th>处理方式</th></tr></thead>
+          <tbody>
+            <tr><td>仓库已有机器人 + 已有模板</td><td>本地 spec parser / 可选 AI 补 spec → preset enrichment → template generator。</td></tr>
+            <tr><td>仓库已有机器人但缺 teleop 模板</td><td>阻断并提示缺模板，不让模型硬写。</td></tr>
+            <tr><td>仓库没有的机器人</td><td>进入后续独立 skill：用户提供 USD → 生成 URDF / robot.py / retargeting 资产；当前先不做。</td></tr>
+          </tbody>
+        </table>
       </section>
 
       <section>
@@ -95,14 +118,34 @@ python my_docs/env_cfg_skills/orchestrator.py chat</code></pre>
   api_key: "你的本地 API Key"
   api_key_env: "ENV_CFG_LLM_API_KEY"
   model: "你的模型名"
+  api_style: "chat_completions"
+  timeout_s: 300
+  max_retries: 2
+  retry_backoff_s: 1.0
 workflow:
   max_spec_iterations: 3
+  dry_run: true</code></pre>
+        <p>如果使用火山 Ark 的 <code>/api/v3/responses</code> 接口，配置可以写成：</p>
+        <pre><code>llm:
+  api_base_url: "https://ark.cn-beijing.volces.com/api/v3/responses"
+  api_key: "你的本地 API Key"
+  api_key_env: "ENV_CFG_LLM_API_KEY"
+  model: "doubao-seed-2-1-pro-260628"
+  api_style: "responses"
+  timeout_s: 300
+  max_retries: 2
+  retry_backoff_s: 1.0
+workflow:
+  max_spec_iterations: 5
   dry_run: true</code></pre>
         <p>运行方式：</p>
         <pre><code>python my_docs/env_cfg_skills/orchestrator.py chat --enable_api</code></pre>
         <div class="note">
           读取优先级：如果本地配置里写了 <code>llm.api_key</code>，就用它；否则从 <code>llm.api_key_env</code> 指向的环境变量读取。
           更安全的生产做法仍然是环境变量或密钥服务；本地 demo 可以用 gitignored local 配置。
+          <code>api_style</code> 用来告诉 orchestrator 怎么组织请求体：<code>chat_completions</code> 使用 <code>messages</code>，
+          <code>responses</code> 使用 <code>input</code>。
+          如果你遇到 “read operation timed out”，可以先把 <code>timeout_s</code> 调大（例如 300→600），并适当增加 <code>max_retries</code>。
         </div>
       </section>
 

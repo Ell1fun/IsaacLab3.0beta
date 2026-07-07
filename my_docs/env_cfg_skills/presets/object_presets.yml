@@ -1,0 +1,54 @@
+# Object preset facts extracted from existing IsaacLab task configs.
+
+steering_wheel:
+  display_name: SteeringWheel
+  object_slug: steering_wheel
+  usd_path: ${ISAACLAB_NUCLEUS_DIR}/Mimic/pick_place_task/pick_place_assets/steering_wheel.usd
+  pose:
+    pos: [-0.45, 0.45, 0.9996]
+    quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  scale: [0.75, 0.75, 0.75]
+  single_rigid_body: true
+  default_target_pose:
+    pos: [0.45, 0.45, 0.9996]
+    quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+
+bottled_water_c01:
+  display_name: BottledWaterC01
+  object_slug: bottled_water_c01
+  usd_path: ${ISAAC_NUCLEUS_DIR}/SimReady/Residential/Kitchen/Food/Beverages/Bottled_Water_C01/sm_food_beverage_bottledWater_c01_01.usd
+  pose:
+    pos: [-0.45, 0.45, 0.9996]
+    quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  default_target_pose:
+    pos: [0.45, 0.45, 0.9996]
+    quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+
+factory_m16_nut_green:
+  display_name: FactoryM16NutGreen
+  object_slug: factory_m16_nut_green
+  usd_path: ${ISAACLAB_NUCLEUS_DIR}/Mimic/nut_pour_task/nut_pour_assets/factory_m16_nut_green.usd
+  pose:
+    pos: [-0.45, 0.45, 0.9996]
+    quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  default_target_pose:
+    pos: [0.45, 0.45, 0.9996]
+    quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+
+exhaust_pipe:
+  display_name: ExhaustPipe
+  object_slug: exhaust_pipe
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/exhaustpipe_gr1t2_base_env_cfg.py
+  usd_path: "TODO: resolve from exhaustpipe_gr1t2_base_env_cfg.py before final generation"
+  pose:
+    pos: [-0.45, 0.45, 0.9996]
+    quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  default_target_pose:
+    pos: [0.45, 0.45, 0.9996]
+    quat_xyzw: [0.0, 0.0, 0.0, 1.0]

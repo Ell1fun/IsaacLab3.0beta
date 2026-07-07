@@ -3,6 +3,10 @@ llm:
   api_key: "replace-with-your-local-api-key"
   api_key_env: "ENV_CFG_LLM_API_KEY"
   model: "your-model-name"
+  api_style: "chat_completions"  # or "responses" for Ark /api/v3/responses
+  timeout_s: 300
+  max_retries: 2
+  retry_backoff_s: 1.0
 workflow:
   max_spec_iterations: 5
   dry_run: true

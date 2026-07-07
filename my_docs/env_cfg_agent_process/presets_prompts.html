@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：Presets & Prompts 参考</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：Presets & Prompts 参考</h1>
+    <p>把 presets/ 与 prompts/ 两类“可维护资产”说清楚：应包含哪些字段、各字段由谁消费、以及 prompt 的职责边界。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a href="./architecture_evolution.html">开发演进</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./orchestrator_code.html">代码导读</a>
+      <a href="./module_flow.html">模块与流程图</a>
+      <a href="./adaptation_test_gate.html">Adaptation / Test Gate</a>
+      <a href="./preset_enrichment.html">Preset Enrichment</a>
+      <a href="./template_generator.html">Template Generator</a>
+      <a href="./placement_workflow.html">Placement Workflow</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a class="active" href="./presets_prompts.html">Presets & Prompts</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>这页解决什么问题</h2>
+        <p>
+          维护 skill 最容易变乱的两块就是 <b>presets</b> 与 <b>prompts</b>。
+          这页把它们当成“配置资产”来管理：字段要稳定、边界要清晰、由程序消费的事实要可追溯。
+        </p>
+        <div class="note">
+          快速定位：presets 的字段最终会被 <code>presets.py</code> 用于 enrichment（补齐 spec），模板匹配/适配则由 <code>generator_workflow.py</code> 消费。
+          prompts 的输出必须受 schema、workflow gate 约束，不能直接自由生成最终代码。
+        </div>
+      </section>
+
+      <section>
+        <h2>Presets：总原则</h2>
+        <ul>
+          <li><b>只存“仓库确定事实”</b>：例如 EEF link、joint 列表、已有模板 module/class、已知资产 USD 路径。</li>
+          <li><b>不要让 TODO 混进最终生成</b>：如果 <code>usd_path</code> 仍是 TODO，Stage B 必须阻断。</li>
+          <li><b>字段分层</b>：enrichment 用的字段、命名用的字段、模板选择用的字段、适配用的字段应分开看。</li>
+          <li><b>允许继承</b>：通过 <code>inherits</code> 复用共同事实，避免重复维护。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>robot_presets.yml：字段清单</h2>
+        <p>
+          每个机器人 preset 是一个 YAML object，key 是 preset 名（例如 <code>unitree_g1_inspire_ftp</code>、<code>fourier_gr1t2_high_pd</code>）。
+        </p>
+        <table>
+          <thead><tr><th>类别</th><th>字段</th><th>用途</th><th>是否建议必填</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>标识</td>
+              <td><code>display_name</code>、<code>robot_slug</code></td>
+              <td>用于自动命名 <code>task.gym_id</code> / 文件 stem（见 <code>presets.py.task_names_from_presets</code>）。</td>
+              <td>建议必填</td>
+            </tr>
+            <tr>
+              <td>模板/引用</td>
+              <td><code>reference_env_cfg</code></td>
+              <td>目标机器人已有模板的参考 env_cfg（用于 structured snippets 抽取与适配上下文）。</td>
+              <td>建议必填</td>
+            </tr>
+            <tr>
+              <td>输出位置</td>
+              <td><code>output_dir</code>、<code>registration_module</code></td>
+              <td>生成文件写入位置与注册文件位置（目前 pick_place 固定在任务目录下）。</td>
+              <td>建议必填</td>
+            </tr>
+            <tr>
+              <td>模板映射</td>
+              <td><code>supported_teleop_templates</code></td>
+              <td>决定是否存在 exact template：按 <code>control.teleop.input_source</code> 索引到 <code>module</code>/<code>class</code>。</td>
+              <td>建议必填（至少 hand tracking）</td>
+            </tr>
+            <tr>
+              <td>机器人事实</td>
+              <td><code>robot_cfg_import</code>、<code>base_link_name</code>、<code>eef_link_names</code></td>
+              <td>spec enrichment：避免模型猜 EEF/base，直接由 preset 填入。</td>
+              <td>建议必填</td>
+            </tr>
+            <tr>
+              <td>控制/IK</td>
+              <td><code>controlled_joint_names</code></td>
+              <td>Pink IK / action layout 的确定事实（程序或模板会依赖它）。</td>
+              <td>推荐填写</td>
+            </tr>
+            <tr>
+              <td>手部动作</td>
+              <td><code>hand_joint_names</code></td>
+              <td>手指关节顺序的确定事实。对 trigger-open/close 这类映射必须有完整列表。</td>
+              <td>有手就必填</td>
+            </tr>
+            <tr>
+              <td>初始姿态</td>
+              <td><code>init_state</code>、<code>idle_wrist_pose</code></td>
+              <td>teleop 启动时的中性位姿；部分模板还会用于 rebase。</td>
+              <td>推荐填写</td>
+            </tr>
+            <tr>
+              <td>桌子/摆放</td>
+              <td><code>default_table</code>、<code>default_placement</code></td>
+              <td>placement workflow：按桌子中心 + offset 计算 object/target pose。</td>
+              <td>推荐填写</td>
+            </tr>
+            <tr>
+              <td>Motion Controller 适配</td>
+              <td><code>motion_controller_adaptation</code></td>
+              <td>当缺 exact template 但要走 adaptation 时，提供 robot 专属 wrist offset 等事实，降低模型推断风险。</td>
+              <td>仅 motion controller 需要</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>supported_teleop_templates 的 entry</h3>
+        <p>每个 input_source 对应一个 entry，最小字段如下：</p>
+        <pre><code>supported_teleop_templates:
+  openxr_hand_tracking:
+    module: pickplace_unitree_g1_inspire_hand_env_cfg
+    class: PickPlaceG1InspireFTPEnvCfg</code></pre>
+        <p>如果希望 adaptation 使用不同参考（例如统一用 tri 版本），可选加：</p>
+        <pre><code>supported_teleop_templates:
+  openxr_controller:
+    module: pickplace_seres_r11_tri_env_cfg
+    class: PickPlaceR11TriEnvCfg
+    adaptation_reference_env_cfg: source/.../pickplace_seres_r11_tri_env_cfg.py
+    adaptation_reference_module: pickplace_seres_r11_tri_env_cfg
+    adaptation_reference_class: PickPlaceR11TriEnvCfg</code></pre>
+
+        <h3>motion_controller_adaptation 的 entry</h3>
+        <pre><code>motion_controller_adaptation:
+  reference_env_cfg: source/.../fixed_base_upper_body_ik_g1_env_cfg.py
+  left_controller_offset_rpy_deg: [45.0, 180.0, -90.0]
+  right_controller_offset_rpy_deg: [-135.0, 0.0, 90.0]
+  use_wrist_rotation: false
+  use_wrist_position: false
+  grasp_scalar: max_trigger_squeeze</code></pre>
+        <div class="note">
+          这里的 offset 是“controller grip frame → robot EEF task frame”的对齐补偿，强依赖机器人末端 link 坐标系定义；
+          因此不能直接从其他机器人迁移，必须来自本机器人参考或标定流程。
+        </div>
+      </section>
+
+      <section>
+        <h2>object_presets.yml：字段清单</h2>
+        <p>物体 preset 的目标是固定“资产事实”，并为 placement workflow 提供必要信息。</p>
+        <table>
+          <thead><tr><th>字段</th><th>用途</th><th>是否建议必填</th></tr></thead>
+          <tbody>
+            <tr><td><code>display_name</code>、<code>object_slug</code></td><td>用于自动命名与文件 stem。</td><td>建议必填</td></tr>
+            <tr><td><code>usd_path</code></td><td>spawn 物体资产路径；若为 TODO 必须阻断。</td><td>建议必填</td></tr>
+            <tr><td><code>scale</code></td><td>物体缩放。</td><td>推荐</td></tr>
+            <tr><td><code>mass</code></td><td>当使用 single rigid body wrapper 时用于质量属性。</td><td>可选</td></tr>
+            <tr><td><code>single_rigid_body</code></td><td>是否需要“单刚体包装”以满足 RigidObject/PhysX 约束。</td><td>推荐</td></tr>
+            <tr><td><code>reference_env_cfg</code></td><td>当 usd_path 需要从现有任务文件提取时的参考入口。</td><td>可选</td></tr>
+            <tr><td><code>default_quat_xyzw</code>、<code>default_target_quat_xyzw</code></td><td>placement workflow 生成 pose 时的默认朝向。</td><td>可选</td></tr>
+            <tr><td><code>tabletop_z</code></td><td>默认桌面高度（当 robot.default_placement 未提供 z 或需覆盖时）。</td><td>可选</td></tr>
+          </tbody>
+        </table>
+        <div class="note">
+          物体 preset 里可能存在历史字段 <code>pose</code>/<code>default_target_pose</code>。当前主路径以 placement workflow 为准：
+          用户未给 pose 时，使用 <code>robot.default_table.pose</code> 与 <code>robot.default_placement</code> 计算 object/target。
+        </div>
+      </section>
+
+      <section>
+        <h2>Prompts：总原则</h2>
+        <ul>
+          <li><b>prompt 是“行为规范”</b>：告诉模型怎么填 spec、怎么输出 JSON、什么时候必须阻断。</li>
+          <li><b>prompt 不是代码生成器本体</b>：最终写文件必须经过 workflow gate（schema、tests、write gate）。</li>
+          <li><b>按职责拆分</b>：Spec Builder / Template Adaptation / Generator 三类 prompt 不要混用。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>prompts/：文件职责一览</h2>
+        <table>
+          <thead><tr><th>文件</th><th>何时会用</th><th>输入</th><th>输出</th><th>边界</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>pick_place_vr_spec_builder.md</code></td>
+              <td>Stage A schema gate 失败且开启 <code>--enable_api</code> 时。</td>
+              <td>user_text + schema + draft_spec + validation_errors。</td>
+              <td>补齐后的 <code>PickPlaceVRSpec</code>（YAML/JSON）。</td>
+              <td>不写最终 env_cfg；不发明 joint/link/usd 路径。</td>
+            </tr>
+            <tr>
+              <td><code>pick_place_vr_template_adaptation.md</code></td>
+              <td>Stage B 缺 exact template 且开启 <code>--enable_api</code> 时。</td>
+              <td>spec + 目标机器人模板 snippets + 同输入源参考 snippets + adaptation preset。</td>
+              <td><code>adaptation_spec</code>（JSON）。</td>
+              <td>禁止输出 Python；最终 env_cfg 必须由程序确定性渲染。</td>
+            </tr>
+            <tr>
+              <td><code>pick_place_vr_generator.md</code></td>
+              <td>作为 fallback/参考：未来支持非模板场景或其他 skill 时使用。</td>
+              <td>已通过 schema gate 的 spec。</td>
+              <td>files/commands 的结构化对象。</td>
+              <td>当前 pick_place_vr 主路径优先 template generator，不依赖该 prompt。</td>
+            </tr>
+            <tr>
+              <td><code>env_cfg_generator.md</code></td>
+              <td>早期通用 prompt（保留作参考）。</td>
+              <td>不稳定。</td>
+              <td>不稳定。</td>
+              <td>不建议作为生产路径。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>新增一个 robot/object preset 的最小步骤</h2>
+        <ol>
+          <li>在 <code>presets/robot_presets.yml</code> 或 <code>presets/object_presets.yml</code> 增加条目。</li>
+          <li>同步更新 <code>schemas/pick_place_vr_spec.schema.yml</code> 的 enum（让 <code>robot.preset</code>/<code>object.preset</code> 可选）。</li>
+          <li>补一个 examples 输入（可选但强烈建议），避免后续回归时忘掉预期。</li>
+          <li>如果新增的是 motion controller 支持：尽量提供本机器人 <code>motion_controller_adaptation</code> 的参考与 offsets；否则应明确 blocked。</li>
+        </ol>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

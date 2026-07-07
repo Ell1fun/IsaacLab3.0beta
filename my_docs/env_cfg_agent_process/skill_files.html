@@ -9,7 +9,7 @@
 <body>
   <header>
     <h1>AI Agent 生成 env_cfg：Skill 文件</h1>
-    <p>梳理 env_cfg_skills 中每类文件的职责：完整 skill 不只是 schema，还包括 prompts、checklist、examples 和 orchestrator workflow。</p>
+    <p>梳理 env_cfg_skills 中每类文件的职责：完整 skill 不只是 schema，还包括 presets、templates、prompts、checklist、examples 和 orchestrator workflow。</p>
   </header>
 
   <main>
@@ -17,10 +17,16 @@
       <strong>目录</strong>
       <a href="./index.html">总览</a>
       <a href="./architecture.html">架构分层</a>
+      <a href="./architecture_evolution.html">开发演进</a>
       <a href="./schema_spec.html">Schema / Spec</a>
       <a href="./workflow.html">Workflow</a>
       <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./orchestrator_code.html">代码导读</a>
+      <a href="./module_flow.html">模块与流程图</a>
+      <a href="./adaptation_test_gate.html">Adaptation / Test Gate</a>
+      <a href="./preset_enrichment.html">Preset Enrichment</a>
       <a class="active" href="./skill_files.html">Skill 文件</a>
+      <a href="./presets_prompts.html">Presets & Prompts</a>
       <a href="./roadmap.html">落地路线</a>
     </nav>
 
@@ -32,7 +38,7 @@
           <thead><tr><th>路径</th><th>用途</th></tr></thead>
           <tbody>
             <tr><td><code>my_docs/env_cfg_agent_process</code></td><td>知识库：解释概念、流程、架构、伪代码和路线图。</td></tr>
-            <tr><td><code>my_docs/env_cfg_skills</code></td><td>执行材料：schema、prompt、orchestrator、后续 checklist/examples。</td></tr>
+            <tr><td><code>my_docs/env_cfg_skills</code></td><td>执行材料：schema、presets、prompt、orchestrator、checklist/examples。</td></tr>
           </tbody>
         </table>
       </section>
@@ -43,6 +49,8 @@
           <thead><tr><th>文件</th><th>作用</th></tr></thead>
           <tbody>
             <tr><td><code>env_cfg_skills/schemas/pick_place_vr_spec.schema.yml</code></td><td>PickPlaceVRSpec 的结构约束，负责字段、类型、必填/可选和条件必填。</td></tr>
+            <tr><td><code>env_cfg_skills/presets/robot_presets.yml</code></td><td>仓库内机器人 preset 的确定事实：EEF、base link、IK joints、hand joints、参考 env_cfg、输出目录。</td></tr>
+            <tr><td><code>env_cfg_skills/presets/object_presets.yml</code></td><td>仓库内物体 preset 的确定事实：USD 路径、默认 pose、scale、target pose。</td></tr>
             <tr><td><code>env_cfg_skills/prompts/pick_place_vr_spec_builder.md</code></td><td>Spec Builder prompt：规定自然语言如何补齐成 spec。</td></tr>
             <tr><td><code>env_cfg_skills/prompts/pick_place_vr_generator.md</code></td><td>Generator prompt：规定通过校验的 spec 如何生成 env_cfg 和注册任务。</td></tr>
             <tr><td><code>env_cfg_skills/checklists/post_generation_validation.md</code></td><td>生成后验收清单，检查路径、import、joint/link、action layout、注册。</td></tr>
@@ -59,8 +67,10 @@
           <thead><tr><th>材料</th><th>负责什么</th><th>不负责什么</th></tr></thead>
           <tbody>
             <tr><td><b>Schema</b></td><td>定义 spec 字段结构、类型、枚举、必填/可选和条件必填。</td><td>不告诉 AI 怎么写代码。</td></tr>
+            <tr><td><b>Presets</b></td><td>把仓库中已经确定的机器人/物体事实固化下来，用于 schema gate 前自动补齐 spec。</td><td>不负责发明仓库里没有的新机器人或新资产。</td></tr>
             <tr><td><b>Spec Builder Prompt</b></td><td>把用户自然语言整理成 spec，并根据校验错误做 gap analysis。</td><td>不生成 env_cfg。</td></tr>
-            <tr><td><b>Generator Prompt</b></td><td>根据已通过 schema gate 的 spec 生成 env_cfg、注册任务和启动命令。</td><td>不跳过 schema gate。</td></tr>
+            <tr><td><b>Template Generator</b></td><td>根据已通过 schema gate 的 spec 和仓库已有模板，确定性生成 env_cfg、注册任务和启动命令。</td><td>不让模型自由编写仓库内已有任务模板。</td></tr>
+            <tr><td><b>Generator Prompt</b></td><td>仅作为 fallback/参考：当后续支持非模板场景时，约束模型如何生成代码。</td><td>当前优先级低于模板生成器。</td></tr>
             <tr><td><b>Checklist</b></td><td>生成后验收路径、import、joint/link、action layout、teleop pipeline、注册。</td><td>不代替真实运行测试。</td></tr>
             <tr><td><b>Examples</b></td><td>提供 R11/G1 这类已知任务的输入样例和期望输出摘要。</td><td>不保证新机器人可以直接复用。</td></tr>
           </tbody>
@@ -73,6 +83,9 @@
   orchestrator.py
   schemas/
     pick_place_vr_spec.schema.yml
+  presets/
+    robot_presets.yml
+    object_presets.yml
   prompts/
     pick_place_vr_spec_builder.md
     pick_place_vr_generator.md
@@ -85,6 +98,15 @@
     g1_pick_place_hand_tracking/
       input.yml
       expected_summary.md</code></pre>
+      </section>
+
+      <section>
+        <h2>进一步阅读：Presets 与 Prompts 的可维护边界</h2>
+        <p>
+          如果你想让知识库更“可维护”，最关键的是把 <code>presets/</code> 与 <code>prompts/</code> 当成两类独立资产来管理。
+          具体字段清单、哪些字段被 workflow 消费、每个 prompt 在什么时候会触发，都整理在：
+          <a href="./presets_prompts.html">Presets &amp; Prompts</a>。
+        </p>
       </section>
 
     </div>

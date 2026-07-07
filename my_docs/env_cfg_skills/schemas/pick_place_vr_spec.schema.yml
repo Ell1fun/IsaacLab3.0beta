@@ -35,8 +35,8 @@ properties:
         description: "自动生成 env_cfg 文件名主干，例如 auto_pickplace_unitree_g1_steering_wheel_teleop_env_cfg"
       gym_id:
         type: string
-        pattern: ^Isaac-Auto-PickPlace-[A-Za-z0-9]+-[A-Za-z0-9]+-Teleop-v[0-9]+$
-        description: "自动注册的 Gym task id，例如 Isaac-Auto-PickPlace-UnitreeG1-SteeringWheel-Teleop-v0"
+        pattern: ^Isaac-Auto-PickPlace-[A-Za-z0-9]+-[A-Za-z0-9]+(-[A-Za-z0-9]+)?-Teleop-v[0-9]+$
+        description: "自动注册的 Gym task id，例如 Isaac-Auto-PickPlace-UnitreeG1-SteeringWheel-HandTracking-Teleop-v0"
       notes:
         type: string
   robot:

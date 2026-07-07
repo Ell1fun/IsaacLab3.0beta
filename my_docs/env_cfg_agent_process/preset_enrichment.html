@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：Preset Enrichment</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：Preset Enrichment</h1>
+    <p>解释为什么 schema 不够、为什么需要 robot/object presets，以及 orchestrator 如何在 schema gate 前自动补齐 spec。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a href="./architecture_evolution.html">开发演进</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./orchestrator_code.html">代码导读</a>
+      <a class="active" href="./preset_enrichment.html">Preset Enrichment</a>
+      <a href="./template_generator.html">Template Generator</a>
+      <a href="./placement_workflow.html">Placement Workflow</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>为什么要加 presets</h2>
+        <p>
+          schema 只负责约束 spec 的结构，例如哪些字段必填、字段类型是什么、哪些 enum 合法。
+          但 schema 不知道 GR1T2 的 EEF link 名称、Pink IK 受控关节顺序、手部关节顺序、参考 env_cfg 路径和正确注册目录。
+          这些是仓库里的确定事实，不应该让模型每次自由猜。
+        </p>
+        <div class="note">
+          所以新增 preset enrichment：模型只需要识别 <code>robot.preset</code> 和 <code>object.preset</code>，orchestrator 再用本地 preset 表把确定字段补齐。
+        </div>
+      </section>
+
+      <section>
+        <h2>它解决了模型的什么困境</h2>
+        <table>
+          <thead><tr><th>模型原来的困境</th><th>原因</th><th>preset enrichment 后怎么解决</th></tr></thead>
+          <tbody>
+            <tr><td>EEF link 写成 TODO</td><td>schema 只要求有字段，不知道具体 link 名。</td><td><code>robot_presets.yml</code> 固化 <code>left_hand_pitch_link/right_hand_pitch_link</code> 等。</td></tr>
+            <tr><td>Pink IK joints 不敢写</td><td>模型怕编造 joint 顺序。</td><td>从参考 env_cfg 抽取后写入 <code>controlled_joint_names</code>。</td></tr>
+            <tr><td>hand_joint_names 缺失</td><td>teleop action layout 对顺序很敏感。</td><td>preset 固化和 pipeline 匹配的 hand joint 顺序。</td></tr>
+            <tr><td>table/object USD 变成 TODO</td><td>用户自然语言不会提供资产路径。</td><td><code>object_presets.yml</code> 和 robot 默认 table 自动补齐。</td></tr>
+            <tr><td>生成路径少一层 <code>isaaclab_tasks</code></td><td>模型只凭路径模式猜。</td><td>generator prompt/checklist 写死正确输出目录。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>新增文件</h2>
+        <table>
+          <thead><tr><th>文件</th><th>作用</th></tr></thead>
+          <tbody>
+            <tr><td><code>env_cfg_skills/presets/robot_presets.yml</code></td><td>机器人 preset 映射表：robot cfg、base link、EEF、IK joints、hand joints、init state、默认 table、默认 placement、参考 env_cfg、输出目录。</td></tr>
+            <tr><td><code>env_cfg_skills/presets/object_presets.yml</code></td><td>物体 preset 映射表：USD 路径、scale、质量、是否单刚体、默认朝向等物体自身事实。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>在 workflow 中的位置</h2>
+        <pre><code>用户自然语言
+  ↓
+Spec Builder 生成粗 spec
+  ↓
+Preset Enrichment
+  - 根据 robot.preset 补齐机器人事实
+  - 根据 object.preset 补齐物体事实
+  - 根据二者生成 task.generated_file_stem / task.gym_id
+  - 用户未给坐标时，根据 robot.default_placement 计算 object.pose / target.pose
+  ↓
+Schema Gate
+  ↓
+Template Generator 确定性生成 env_cfg / 注册补丁 / 启动命令</code></pre>
+      </section>
+
+      <section>
+        <h2>GR1T2 + 水瓶例子</h2>
+        <p>用户说：</p>
+        <pre><code>帮我生成一个傅里叶GR1T2抓取水瓶的遥操任务</code></pre>
+        <p>模型只要识别出：</p>
+        <pre><code>robot:
+  preset: fourier_gr1t2_high_pd
+object:
+  preset: bottled_water_c01</code></pre>
+        <p>orchestrator 会自动补齐：</p>
+        <ul>
+          <li><code>robot.eef_link_names.left/right</code>：<code>left_hand_pitch_link/right_hand_pitch_link</code></li>
+          <li><code>robot.base_link_name</code>：<code>base_link</code></li>
+          <li><code>robot.controlled_joint_names</code>：GR1T2 双臂 Pink IK 受控关节顺序</li>
+          <li><code>robot.hand_joint_names</code>：GR1T2 双手 22 个 action joint 顺序</li>
+          <li><code>scene.table.usd_path</code>：PackingTable 路径</li>
+          <li><code>object.usd_path</code>：瓶装水 SimReady 路径</li>
+          <li><code>task.gym_id</code>：<code>Isaac-Auto-PickPlace-FourierGR1T2-BottledWaterC01-Teleop-v0</code></li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>边界</h2>
+        <ul>
+          <li>preset enrichment 只补仓库中已经确定的信息，不负责发明新资产。</li>
+          <li>如果用户给的机器人或物体不在 preset 中，仍然需要追问或进入后续“用户给 USD 生成资产”的独立 skill。</li>
+          <li>如果 preset 中仍是 TODO，例如某些资产路径未解析，generator 不应该硬生成最终代码。</li>
+        </ul>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

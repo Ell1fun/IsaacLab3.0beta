@@ -17,9 +17,16 @@
       <strong>目录</strong>
       <a href="./index.html">总览</a>
       <a href="./architecture.html">架构分层</a>
+      <a href="./architecture_evolution.html">开发演进</a>
       <a href="./schema_spec.html">Schema / Spec</a>
       <a class="active" href="./workflow.html">Workflow</a>
       <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./orchestrator_code.html">代码导读</a>
+      <a href="./module_flow.html">模块与流程图</a>
+      <a href="./adaptation_test_gate.html">Adaptation / Test Gate</a>
+      <a href="./preset_enrichment.html">Preset Enrichment</a>
+      <a href="./template_generator.html">Template Generator</a>
+      <a href="./placement_workflow.html">Placement Workflow</a>
       <a href="./skill_files.html">Skill 文件</a>
       <a href="./roadmap.html">落地路线</a>
     </nav>
@@ -28,16 +35,17 @@
       <section>
         <h2>两阶段 Workflow</h2>
         <p>
-          生成 env_cfg 不建议一步到位。更稳定的方式是两阶段：先补齐 spec，再用 spec 生成代码。
+          生成 env_cfg 不建议一步到位。更稳定的方式是两阶段：先补齐 spec，再用 spec 进入模板生成器。
+          对仓库里已有完整模板的机器人，Stage B 不再让大模型写代码，而是由程序确定性生成。
         </p>
         <div class="grid">
           <div class="card">
             <b>Stage A：Spec Builder</b>
-            <span>自然语言 → 结构化 spec → schema 校验 → 缺字段追问。</span>
+            <span>本地解析或 AI：自然语言 → 粗 spec → preset enrichment → schema 校验 → 缺字段追问。</span>
           </div>
           <div class="card">
-            <b>Stage B：Generator</b>
-            <span>已校验 spec → env_cfg / 注册 / 启动命令 → checklist 验收。</span>
+            <b>Stage B：Template Generator</b>
+            <span>已校验 spec → 模板化 env_cfg / 注册 / 启动命令 → checklist 验收。</span>
           </div>
         </div>
       </section>
@@ -48,16 +56,19 @@
 2. Router 选择 skill：pick_place_vr
 3. 加载 schema / prompt / checklist
 4. Spec Builder loop
-   4.1 AI 生成或更新 spec
-   4.2 Orchestrator 用 schema 校验
-   4.3 不通过：把错误转成追问，继续对话
-   4.4 通过：冻结 spec，进入 Generator
-5. Generator
-   5.1 AI 根据 spec 生成 env_cfg 和注册改动
-   5.2 输出 action layout、link/joint 清单、启动命令
+   4.1 优先本地解析仓库内 preset 需求
+   4.2 本地解析不够时，才调用 AI 生成或更新 spec
+   4.3 Orchestrator 根据 robot/object presets 自动补齐仓库确定事实
+   4.4 Placement Workflow 根据 robot.default_placement 自动计算 object.pose / target.pose
+   4.5 Orchestrator 用 schema 校验
+   4.6 不通过：把错误转成追问，继续对话
+   4.7 通过：冻结 spec，进入 Template Generator
+5. Template Generator
+   5.1 根据 spec + presets 选择仓库已有 env_cfg 模板
+   5.2 程序生成薄封装 env_cfg、task 注册和启动命令
 6. Post Validation
    6.1 检查 import、文件路径、joint/link、action 维度、task 注册
-   6.2 失败则回传错误给 AI 修复
+   6.2 失败则阻断交付，优先修模板或 preset
 7. 交付结果</code></pre>
       </section>
 
@@ -69,12 +80,29 @@
         <table>
           <thead><tr><th>Gate</th><th>检查对象</th><th>失败后怎么处理</th></tr></thead>
           <tbody>
+            <tr><td><b>Preset Enrichment</b></td><td>根据 <code>robot.preset</code> / <code>object.preset</code> 自动补齐 EEF、关节、资产路径和自动命名。</td><td>如果 preset 不存在或仍是 TODO，保留错误给 Schema/Asset Gate。</td></tr>
             <tr><td><b>Schema Gate</b></td><td>Spec 是否满足 schema。</td><td>不进入代码生成，转成追问让用户补齐。</td></tr>
             <tr><td><b>Asset Gate</b></td><td>robot cfg、USD/URDF、link/joint 是否存在。</td><td>提示缺失文件或名称不匹配。</td></tr>
             <tr><td><b>Action Gate</b></td><td>teleop pipeline 输出维度是否等于 ActionsCfg 解析维度。</td><td>阻断交付，要求修 action layout。</td></tr>
             <tr><td><b>Registration Gate</b></td><td>Gym task id 和 env_cfg entry point 是否注册成功。</td><td>修注册文件或启动命令。</td></tr>
           </tbody>
         </table>
+      </section>
+
+      <section>
+        <h2>最终命令输出</h2>
+        <p>
+          Generator 的交付结果里必须输出一条可直接复制运行的 teleop 命令。
+          命令中的 <code>--task</code> 必须使用本次注册出来的 <code>task.gym_id</code>。
+        </p>
+        <pre><code>./isaaclab.sh -p scripts/environments/teleoperation/teleop_se3_agent.py \
+  --task Isaac-Auto-PickPlace-UnitreeG1-SteeringWheel-Teleop-v0 \
+  --visualizer kit \
+  --xr \
+  --cloudxr_env cloudxrjs</code></pre>
+        <div class="note">
+          这里的 task id 只是示例。真实输出必须替换成本次 spec 里的 <code>task.gym_id</code>，也就是注册文件里新增的 Gym ID。
+        </div>
       </section>
 
     </div>

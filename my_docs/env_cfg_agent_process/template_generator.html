@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：Template Generator</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：Template Generator</h1>
+    <p>解释 orchestrator 如何不用大模型，直接用代码确定性生成 env_cfg 薄封装、task 注册内容和 teleop 启动命令。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a href="./architecture_evolution.html">开发演进</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./orchestrator_code.html">代码导读</a>
+      <a href="./module_flow.html">模块与流程图</a>
+      <a href="./adaptation_test_gate.html">Adaptation / Test Gate</a>
+      <a href="./preset_enrichment.html">Preset Enrichment</a>
+      <a class="active" href="./template_generator.html">Template Generator</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>为什么不用模型写 env_cfg</h2>
+        <p>
+          对仓库里已有完整 pick_place teleop 模板的机器人，env_cfg 的控制器、teleop pipeline、IK、observations、terminations 已经在参考文件里写好了。
+          这类任务不应该让大模型重新写一整份代码，因为模型容易漏路径、猜 joint、写 TODO 或覆盖手写任务。
+        </p>
+        <div class="note">
+          当前工程决策：模型最多负责把用户自然语言补成 spec；仓库内已有机器人使用 <b>template generator</b> 确定性生成文件。
+        </div>
+      </section>
+
+      <section>
+        <h2>输入和输出</h2>
+        <table>
+          <thead><tr><th>阶段</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td>输入</td><td>已经通过 schema gate 的 spec，且经过 robot/object preset enrichment。</td></tr>
+            <tr><td>输出 1</td><td>自动 env_cfg 薄封装文件，例如 <code>auto_pickplace_fourier_gr1t2_bottled_water_c01_teleop_env_cfg.py</code>。</td></tr>
+            <tr><td>输出 2</td><td><code>pick_place/__init__.py</code> 的注册后完整内容或 dry-run payload。</td></tr>
+            <tr><td>输出 3</td><td>可复制运行的 teleop 启动命令。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>代码主线</h2>
+        <pre><code>_run_generator_workflow(spec)
+  ↓
+如果 skill 是 pick_place_vr：
+  _run_template_generator_workflow(spec)
+    ↓
+    _render_template_env_cfg(spec)
+      - _template_base_for_robot(robot.preset)
+      - _auto_env_class_name(spec)
+      - _python_asset_expr(object.usd_path)
+      - 生成继承已有模板的薄封装 env_cfg 内容
+    ↓
+    _render_registered_init(spec, module_name, class_name)
+      - 读取现有 pick_place/__init__.py
+      - 如果 task.gym_id 不存在，则追加 gym.register 块
+    ↓
+    _teleop_command_for_spec(spec)
+      - 根据 task.gym_id 拼 teleop_se3_agent.py 启动命令</code></pre>
+      </section>
+
+      <section>
+        <h2>第一步：选择已有模板</h2>
+        <p>
+          <code>_template_base_for_robot(robot_preset)</code> 根据 <code>robot.preset</code> 选择仓库已有的基础 env_cfg。
+          这些基础 env_cfg 已经包含复杂的 teleop pipeline、IK action、observation、termination 和事件逻辑。
+        </p>
+        <table>
+          <thead><tr><th>robot.preset</th><th>继承的基础模板</th></tr></thead>
+          <tbody>
+            <tr><td><code>fourier_gr1t2_high_pd</code></td><td><code>pickplace_gr1t2_env_cfg.PickPlaceGR1T2EnvCfg</code></td></tr>
+            <tr><td><code>unitree_g1_inspire_ftp</code></td><td><code>pickplace_unitree_g1_inspire_hand_env_cfg.PickPlaceG1InspireFTPEnvCfg</code></td></tr>
+            <tr><td><code>seres_r11_a2_high_pd</code></td><td><code>pickplace_seres_r11_env_cfg.PickPlaceR11EnvCfg</code></td></tr>
+          </tbody>
+        </table>
+        <div class="note">
+          如果 robot preset 没有基础模板，例如当前 <code>unitree_h1</code>，template generator 会阻断，而不是让模型硬写。
+        </div>
+      </section>
+
+      <section>
+        <h2>第二步：生成 env_cfg 薄封装</h2>
+        <p>
+          <code>_render_template_env_cfg(spec)</code> 不从零生成 env_cfg，而是生成一个继承已有模板的子类。
+          它只覆盖 spec 中确定的任务参数，例如物体 USD、物体 scale、物体初始 pose、桌子 pose、target pose。
+        </p>
+        <pre><code>from .pickplace_gr1t2_env_cfg import PickPlaceGR1T2EnvCfg
+
+
+class AutoPickPlaceFourierGR1T2BottledWaterC01TeleopEnvCfg(PickPlaceGR1T2EnvCfg):
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.scene.object.spawn.usd_path = f"{ISAAC_NUCLEUS_DIR}/SimReady/.../bottledWater...usd"
+        self.scene.object.spawn.scale = (1.0, 1.0, 1.0)
+        self.scene.object.init_state.pos = (-0.45, 0.45, 0.9996)
+        self.scene.object.init_state.rot = (0.0, 0.0, 0.0, 1.0)</code></pre>
+        <p>
+          这样做的好处是：原模板里的 IK、teleop pipeline、action layout、observation、termination 都不会被模型破坏。
+        </p>
+      </section>
+
+      <section>
+        <h2>第三步：生成注册内容</h2>
+        <p>
+          <code>_render_registered_init(spec, module_name, class_name)</code> 会读取现有
+          <code>source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/__init__.py</code>。
+          如果 <code>task.gym_id</code> 没有注册过，就追加一个带 <code>Auto</code> 前缀的 <code>gym.register(...)</code> 块。
+        </p>
+        <pre><code>gym.register(
+    id="Isaac-Auto-PickPlace-FourierGR1T2-BottledWaterC01-Teleop-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.auto_pickplace_fourier_gr1t2_bottled_water_c01_teleop_env_cfg:AutoPickPlaceFourierGR1T2BottledWaterC01TeleopEnvCfg",
+        "robomimic_bc_cfg_entry_point": f"{agents.__name__}:robomimic/bc_rnn_low_dim.json",
+    },
+    disable_env_checker=True,
+)</code></pre>
+        <div class="note">
+          注册 ID 和文件名都带 <code>Auto</code> / <code>auto_pickplace_</code>，用于和仓库手写任务明显区分，避免覆盖原任务。
+        </div>
+      </section>
+
+      <section>
+        <h2>第四步：生成启动命令</h2>
+        <p>
+          <code>_teleop_command_for_spec(spec)</code> 不需要模型，直接读取 <code>task.gym_id</code> 拼命令。
+        </p>
+        <pre><code>./isaaclab.sh -p scripts/environments/teleoperation/teleop_se3_agent.py \
+  --task Isaac-Auto-PickPlace-FourierGR1T2-BottledWaterC01-Teleop-v0 \
+  --visualizer kit \
+  --xr \
+  --cloudxr_env cloudxrjs</code></pre>
+      </section>
+
+      <section>
+        <h2>第五步：dry-run 和写文件</h2>
+        <p>
+          <code>_run_template_generator_workflow(spec)</code> 只负责返回 payload；真正是否写入由 <code>_write_generated_files(generated, dry_run)</code> 决定。
+        </p>
+        <table>
+          <thead><tr><th>模式</th><th>行为</th></tr></thead>
+          <tbody>
+            <tr><td><code>dry_run: true</code></td><td>只输出 <code>DRY_RUN:/abs/path</code>，不改仓库文件。</td></tr>
+            <tr><td><code>--write</code></td><td>允许把生成的 env_cfg 和注册内容真正写入 repo。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>完整例子：GR1T2 + 水瓶</h2>
+        <pre><code>python my_docs/env_cfg_skills/orchestrator.py generate "帮我生成一个傅里叶GR1T2抓取水瓶的遥操任务"</code></pre>
+        <p>这条命令会走：</p>
+        <ol>
+          <li>本地 spec parser：识别 <code>fourier_gr1t2_high_pd</code> 和 <code>bottled_water_c01</code>。</li>
+          <li>preset enrichment：补齐 EEF、IK joints、hand joints、USD 路径、自动 task id。</li>
+          <li>template generator：继承 <code>PickPlaceGR1T2EnvCfg</code> 生成薄封装。</li>
+          <li>注册生成器：追加 <code>Isaac-Auto-PickPlace-FourierGR1T2-BottledWaterC01-Teleop-v0</code>。</li>
+          <li>命令生成器：输出 <code>teleop_se3_agent.py --task ...</code>。</li>
+        </ol>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

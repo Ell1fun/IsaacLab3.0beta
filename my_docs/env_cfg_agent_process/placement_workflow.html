@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：Placement Workflow</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：Placement Workflow</h1>
+    <p>说明 object.init_state 和 target_pose 如何由 robot workspace 与 object preset 确定性计算，而不是让模型猜绝对坐标。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a href="./architecture_evolution.html">开发演进</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./orchestrator_code.html">代码导读</a>
+      <a href="./module_flow.html">模块与流程图</a>
+      <a href="./adaptation_test_gate.html">Adaptation / Test Gate</a>
+      <a href="./preset_enrichment.html">Preset Enrichment</a>
+      <a href="./template_generator.html">Template Generator</a>
+      <a class="active" href="./placement_workflow.html">Placement Workflow</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>为什么不能直接用 object preset 里的固定坐标</h2>
+        <p>
+          之前 <code>bottled_water_c01</code> 的 preset 里直接写了 <code>[-0.45, 0.45, 0.9996]</code>。
+          这个坐标对某些模板可能能看见物体，但它没有考虑机器人本体、桌子中心、手臂可达范围和目标放置点。
+          因此同一个水瓶换到 Unitree G1 时，就可能离机器人过远。
+        </p>
+        <div class="note">
+          新规则：物体 preset 描述物体自身事实；机器人 preset 描述工作空间；workflow 负责计算最终 <code>object.pose</code> 和 <code>target.pose</code>。
+        </div>
+      </section>
+
+      <section>
+        <h2>职责拆分</h2>
+        <table>
+          <thead><tr><th>层级</th><th>负责什么</th></tr></thead>
+          <tbody>
+            <tr><td>Object preset</td><td>USD 路径、scale、质量、是否需要单刚体 spawner、默认朝向等物体自身事实。</td></tr>
+            <tr><td>Robot preset</td><td>桌子位置、机器人工作空间、推荐 object/target 相对桌面中心的偏移。</td></tr>
+            <tr><td>Placement workflow</td><td>如果用户没有明确给坐标，就根据 <code>table_center + offset</code> 计算 pose。</td></tr>
+            <tr><td>Agent / LLM</td><td>只负责理解“靠近右手、放中间、放远一点”等意图，不直接猜最终绝对坐标。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>当前实现</h2>
+        <p>
+          <code>robot_presets.yml</code> 里新增了 <code>default_placement</code>。
+          例如 Unitree G1 的桌子中心是 <code>[0.0, 0.55, 0.0]</code>，默认物体偏移是 <code>[0.0, -0.10]</code>。
+          因此 workflow 会把物体放到 <code>[0.0, 0.45, 0.9996]</code>，而不是旧的 <code>[-0.45, 0.45, 0.9996]</code>。
+        </p>
+        <pre><code>default_table:
+  pose:
+    pos: [0.0, 0.55, 0.0]
+
+default_placement:
+  object_xy_from_table_center: [0.0, -0.10]
+  target_xy_from_table_center: [0.25, -0.10]
+  z: 0.9996</code></pre>
+      </section>
+
+      <section>
+        <h2>代码流程</h2>
+        <pre><code>_enrich_pick_place_vr_spec(spec)
+  ↓
+读取 robot preset 和 object preset
+  ↓
+补齐 robot/table/object 的确定事实
+  ↓
+_compute_default_pick_place_placement(...)
+  - 如果用户已经明确给 object.pose：尊重用户
+  - 如果用户没有给 object.pose：用 table_center + object offset 计算
+  - 如果用户没有给 target.pose：用 table_center + target offset 计算
+  ↓
+schema gate
+  ↓
+template generator 写入 env_cfg</code></pre>
+      </section>
+
+      <section>
+        <h2>优先级</h2>
+        <ol>
+          <li>用户明确指定坐标：workflow 不覆盖。</li>
+          <li>用户没有指定坐标：使用 <code>robot.default_placement</code> 自动计算。</li>
+          <li>没有 placement 规则：才退回到后续 fallback 或阻断，不让模型硬猜。</li>
+        </ol>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：模块与流程图</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：模块与流程图</h1>
+    <p>用模块表和流程图说明每个 Python 文件做什么，以及什么情况下调用 AI、什么情况下直接根据 presets/template 写文件。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a href="./architecture_evolution.html">开发演进</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./orchestrator_code.html">代码导读</a>
+      <a class="active" href="./module_flow.html">模块与流程图</a>
+      <a href="./adaptation_test_gate.html">Adaptation / Test Gate</a>
+      <a href="./preset_enrichment.html">Preset Enrichment</a>
+      <a href="./template_generator.html">Template Generator</a>
+      <a href="./placement_workflow.html">Placement Workflow</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>这张图叫什么</h2>
+        <p>
+          工程里通常把这种图叫 <b>流程图</b>（flowchart）。如果重点是系统状态变化，也可以叫 <b>状态机图</b>；
+          如果重点是一次请求从入口到结束的活动顺序，也可以叫 <b>活动图</b>（activity diagram）。
+          这里用 flowchart 表达 orchestrator 的分支决策。
+        </p>
+      </section>
+
+      <section>
+        <h2>模块职责总表</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>模块</th>
+              <th>核心职责</th>
+              <th>主要输入</th>
+              <th>主要输出</th>
+              <th>是否调 AI</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>orchestrator.py</code></td>
+              <td>CLI 入口，解析命令，处理 <code>route/template/validate/generate/chat</code>，维持 chat loop。</td>
+              <td>终端参数、用户自然语言、<code>--enable_api</code>、<code>--write</code>。</td>
+              <td>命令输出；调用 pipeline 后得到 <code>written_files</code> 和 <code>commands</code>。</td>
+              <td>否，只把 <code>enable_api</code> 传下去。</td>
+            </tr>
+            <tr>
+              <td><code>registry.py</code></td>
+              <td>注册可用 skill，并根据用户 prompt 做关键词路由。</td>
+              <td>用户自然语言、可用 skill 列表。</td>
+              <td>选中的 <code>SkillDef</code>，例如 <code>pick_place_vr</code>。</td>
+              <td>否。</td>
+            </tr>
+            <tr>
+              <td><code>config_loader.py</code></td>
+              <td>读取本地配置、环境变量和 CLI override，决定 dry-run 还是写文件。</td>
+              <td><code>orchestrator_config.local.yml</code>、环境变量、CLI 参数。</td>
+              <td><code>OrchestratorConfig</code>。</td>
+              <td>否。</td>
+            </tr>
+            <tr>
+              <td><code>pipeline.py</code></td>
+              <td>串联 Stage A 和 Stage B，是一次生成请求的主流水线。</td>
+              <td><code>SkillDef</code>、用户文本、配置、API key、是否启用 API。</td>
+              <td>完整 workflow 输出，成功时可裁剪成短格式。</td>
+              <td>否，自己不调；把开关传给下游。</td>
+            </tr>
+            <tr>
+              <td><code>spec_builder.py</code></td>
+              <td>把自然语言变成 <code>PickPlaceVRSpec</code>；先本地 parser，不够时才 AI fallback。</td>
+              <td>用户 prompt、schema、draft spec、validation errors。</td>
+              <td>结构化 spec、schema errors、追问问题、enrichment notes。</td>
+              <td>有条件调用：本地 parser 后 schema 不通过且传了 <code>--enable_api</code>。</td>
+            </tr>
+            <tr>
+              <td><code>presets.py</code></td>
+              <td>加载 robot/object presets、解析继承、补齐仓库确定事实，并计算默认 placement。</td>
+              <td>初始 spec、<code>robot_presets.yml</code>、<code>object_presets.yml</code>。</td>
+              <td>enriched spec，例如 EEF、joints、USD、table、object pose、target pose、task id。</td>
+              <td>否。</td>
+            </tr>
+            <tr>
+              <td><code>schema_validation.py</code></td>
+              <td>执行 schema gate，判断 spec 是否能进入 generator。</td>
+              <td>schema、enriched spec。</td>
+              <td>错误列表；空列表表示通过。</td>
+              <td>否。</td>
+            </tr>
+            <tr>
+              <td><code>generator_workflow.py</code></td>
+              <td>根据通过校验的 spec 做 exact template 匹配；匹配成功生成 env_cfg/注册/命令；缺模板时抽取参考 env_cfg 的结构化片段，调用 AI 生成 adaptation_spec，再由程序确定性渲染 candidate env_cfg。</td>
+              <td>validated spec、skill、配置。</td>
+              <td><code>files</code>、<code>commands</code>，或 <code>adaptation_candidate</code>。</td>
+              <td>exact template 不调 AI；缺 exact template 且 <code>--enable_api</code> 时调 AI 生成 adaptation_spec。</td>
+            </tr>
+            <tr>
+              <td><code>prompts/pick_place_vr_template_adaptation.md</code></td>
+              <td>AI template adaptation 的提示词资产，定义迁移参数推断规则、结构化上下文格式、adaptation_spec JSON 格式和禁止事项。</td>
+              <td>由 <code>generator_workflow.py</code> 读取，和 spec/reference env_cfg snippets 一起发给模型。</td>
+              <td>模型 system prompt。</td>
+              <td>它本身不调 AI，但决定 AI adaptation 的行为。</td>
+            </tr>
+            <tr>
+              <td><code>post_generation_tests.py</code></td>
+              <td>自动测试 gate：生成内容写入前先做语法、TODO、注册、命令和 G1 trigger hand joint coverage 检查。</td>
+              <td>generated payload、validated spec。</td>
+              <td>错误列表；空列表表示允许进入写文件阶段。</td>
+              <td>否。</td>
+            </tr>
+            <tr>
+              <td><code>llm_client.py</code></td>
+              <td>统一封装模型 API 调用、timeout、retry、Ark responses / chat completions 兼容。</td>
+              <td>LLM 配置、API key、messages。</td>
+              <td>模型返回文本，或解析出的结构化对象。</td>
+              <td>是，唯一真正发 HTTP 给模型的模块。</td>
+            </tr>
+            <tr>
+              <td><code>skill_types.py</code></td>
+              <td>定义 <code>SkillDef</code>、<code>LlmConfig</code>、<code>WorkflowConfig</code>、<code>OrchestratorConfig</code>。</td>
+              <td>无运行输入，主要是类型定义。</td>
+              <td>被其他模块复用的数据结构。</td>
+              <td>否。</td>
+            </tr>
+            <tr>
+              <td><code>env_utils.py</code></td>
+              <td>路径、YAML/JSON、<code>deep_fill</code>、缺失值判断、slug 转换等通用工具。</td>
+              <td>文件路径、dict、字符串。</td>
+              <td>通用处理结果。</td>
+              <td>否。</td>
+            </tr>
+            <tr>
+              <td><code>starter_specs.py</code></td>
+              <td>提供 <code>template --skill pick_place_vr</code> 的 starter spec。</td>
+              <td>无。</td>
+              <td>示例 spec。</td>
+              <td>否。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>总流程图</h2>
+        <p>
+          下面是一次 <code>generate</code> 或 <code>chat</code> 请求的完整分支。最关键的判断是：
+          本地 parser + presets + schema 能不能通过；能通过后还要看是否存在 exact template。
+          exact template 存在就不调 AI；schema 不通过且开启了 <code>--enable_api</code> 才进入 AI Spec Builder。
+          exact template 不存在但有参考模板时，如果没开 API 就只输出 adaptation candidate；如果开了 API，就先抽取参考 env_cfg 的结构化片段，再进入 AI adaptation generator 生成 adaptation_spec，最后由程序生成候选 env_cfg。
+        </p>
+        <pre><code>用户命令
+  |
+  v
+orchestrator.py
+  - 解析 CLI 参数
+  - 读取 config
+  - 根据 prompt 或 --skill 选择 skill
+  |
+  v
+pipeline.run_generate_pipeline(...)
+  |
+  v
+Stage A: spec_builder.run_spec_builder_workflow(...)
+  |
+  +-- local parser 能识别常见需求？
+  |      |
+  |      +-- 是：生成最小 spec
+  |      |
+  |      +-- 否：生成不完整 spec，等待 schema gate 判断
+  |
+  v
+presets.enrich_pick_place_vr_spec(...)
+  - robot presets 补齐 base/eef/joints/init/table/template 信息
+  - object presets 补齐 usd/scale/mass/single_rigid_body 信息
+  - placement 根据 table_center + robot.default_placement 算 object.pose / target.pose
+  - 自动生成 task.generated_file_stem / task.gym_id
+  |
+  v
+schema_validation.validate_spec(...)
+  |
+  +-- schema 通过？
+  |      |
+  |      +-- 是
+  |      |     |
+  |      |     v
+  |      |   Stage B: generator_workflow.run_generator_workflow(...)
+  |      |     |
+  |      |     +-- skill == pick_place_vr？
+  |      |           |
+  |      |           +-- 是：检查 (robot, input_source) 是否有 exact template
+  |      |           |     - 继承已有 env_cfg 模板
+  |      |           |     - 生成 auto env_cfg 薄封装
+  |      |           |     - 生成 pick_place/__init__.py 注册内容
+  |      |           |     - 生成可复制 teleop 命令
+  |      |           |     - 写入前必须通过 post_generation_tests
+  |      |           |
+  |      |           +-- 没有 exact template
+  |      |           |     |
+  |      |           |     +-- enable_api=false：输出 adaptation_candidate，不写文件
+  |      |           |     |
+  |      |           |     +-- enable_api=true：抽取 structured snippets
+  |      |           |           - AI 只输出 adaptation_spec
+  |      |           |           - 程序确定性渲染 candidate env_cfg
+  |      |           |           - 写入前必须通过 post_generation_tests
+  |      |           |
+  |      |           +-- 其他 skill：如果 enable_api=true，才可能走 LLM generator fallback
+  |      |
+  |      +-- 否
+  |            |
+  |            +-- enable_api=false？
+  |            |     |
+  |            |     +-- 是：停止，输出 questions，不写文件
+  |            |
+  |            +-- enable_api=true？
+  |                  |
+  |                  +-- 是：调用 AI Spec Builder
+  |                        - 把 user_request + schema + draft_spec + errors 发给模型
+  |                        - 模型只补 spec，不写最终 env_cfg
+  |                        - 返回后再次 preset enrichment + schema gate
+  |
+  v
+generator_workflow.write_generated_files(...)
+  ^
+  |
+post_generation_tests.run_post_generation_tests(...)
+  - generated Python AST parse
+  - no TODO placeholders
+  - registration includes generated gym_id
+  - teleop command is single-line copyable
+  |
+  +-- dry_run=true：只输出 DRY_RUN:/abs/path，不写文件
+  |
+  +-- --write：真正写 auto env_cfg 和 __init__.py
+  |
+  v
+终端短输出
+  - written_files
+  - commands</code></pre>
+      </section>
+
+      <section>
+        <h2>什么时候调用 AI</h2>
+        <table>
+          <thead><tr><th>场景</th><th>是否调用 AI</th><th>原因</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>用户说“帮我生成一个宇树 G1 抓取水瓶的遥操任务”。</td>
+              <td>不调用。</td>
+              <td>本地 parser 能识别 <code>unitree_g1_inspire_ftp</code> 和 <code>bottled_water_c01</code>，presets 能补齐事实，schema 能通过。</td>
+            </tr>
+            <tr>
+              <td>用户说“傅里叶 GR1T2 抓方向盘”。</td>
+              <td>不调用。</td>
+              <td>机器人、物体、模板都在 presets 和 template map 中。</td>
+            </tr>
+            <tr>
+              <td>用户说复杂空间意图，例如“放在右手前方 30cm，目标放到桌子左上角”。</td>
+              <td>可能调用。</td>
+              <td>AI 适合把自然语言意图转成结构化 placement intent；最终坐标仍应由 workflow 计算。</td>
+            </tr>
+            <tr>
+              <td>本地 parser 识别不出机器人或物体，schema gate 不通过，但用户传了 <code>--enable_api</code>。</td>
+              <td>调用。</td>
+              <td>AI Spec Builder 尝试补齐 spec，或者帮助形成追问。</td>
+            </tr>
+            <tr>
+              <td>当前 <code>pick_place_vr</code> spec 已通过 schema，进入 Stage B。</td>
+              <td>不调用。</td>
+              <td>最终 env_cfg、注册和命令由 template generator 确定性生成。</td>
+            </tr>
+            <tr>
+              <td>机器人 preset 存在但没有已有 pick_place teleop 模板，例如当前 H1。</td>
+              <td>不应该硬调用 AI 写代码。</td>
+              <td>应该阻断并提示缺模板；后续单独做机器人接入 skill。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>什么时候直接写文件</h2>
+        <p>
+          “直接写文件”不是指绕过校验，而是指不调用 AI 写代码。只有 spec 通过 schema gate，并且当前 skill 能走确定性 template generator 时，才会生成文件内容。
+        </p>
+        <pre><code>可以写文件的条件：
+1. route 到 pick_place_vr
+2. spec builder 得到结构化 spec
+3. presets 补齐 robot/object/table/placement/task 信息
+4. schema_validation 通过
+5. 进入可生成路径：
+   - exact template：fourier_gr1t2_high_pd -> PickPlaceGR1T2EnvCfg
+   - exact template：unitree_g1_inspire_ftp + handtracking -> PickPlaceG1InspireFTPEnvCfg
+   - exact template：seres_r11_a2_high_pd + handtracking -> PickPlaceR11EnvCfg
+   - exact template：seres_r11_a2_high_pd + controller -> PickPlaceR11TriEnvCfg
+   - adaptation：unitree_g1_inspire_ftp + controller -> AI adaptation_spec + deterministic candidate env_cfg
+6. post_generation_tests 通过
+7. dry_run=false，也就是用户显式传了 --write</code></pre>
+        <div class="note">
+          不传 <code>--write</code> 时，只会输出 <code>DRY_RUN:/abs/path</code>。这是为了避免 demo 阶段误改仓库文件。
+        </div>
+      </section>
+
+      <section>
+        <h2>一句话总结</h2>
+        <p>
+          当前工程的策略是：<b>让 AI 理解需求，不让 AI 直接写最终 env_cfg；让 presets 承载仓库事实，让 template generator 负责确定性代码生成。</b>
+        </p>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

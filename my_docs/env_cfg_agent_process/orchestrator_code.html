@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：代码导读</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：代码导读</h1>
+    <p>重构后，orchestrator.py 不再承载所有逻辑，而是作为 CLI 入口，把请求分发给不同职责模块。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a href="./architecture_evolution.html">开发演进</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a class="active" href="./orchestrator_code.html">代码导读</a>
+      <a href="./module_flow.html">模块与流程图</a>
+      <a href="./adaptation_test_gate.html">Adaptation / Test Gate</a>
+      <a href="./preset_enrichment.html">Preset Enrichment</a>
+      <a href="./template_generator.html">Template Generator</a>
+      <a href="./placement_workflow.html">Placement Workflow</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>重构后的主线</h2>
+        <p>
+          当前代码从“一个大 orchestrator 文件”拆成多个模块。主流程仍然是：用户输入 → route → spec builder → preset enrichment → placement → schema gate → template generator → writer。
+          变化在于：每一步的实现被放到了独立模块，方便后续扩展和排错。
+        </p>
+        <pre><code>orchestrator.py
+  ↓
+pipeline.run_generate_pipeline(...)
+  ↓
+spec_builder.run_spec_builder_workflow(...)
+  ↓
+presets.enrich_pick_place_vr_spec(...)
+  ↓
+schema_validation.validate_spec(...)
+  ↓
+generator_workflow.run_generator_workflow(...)
+  ↓
+generator_workflow.write_generated_files(...)</code></pre>
+      </section>
+
+      <section>
+        <h2>模块职责</h2>
+        <table>
+          <thead><tr><th>文件</th><th>职责</th><th>什么时候看它</th></tr></thead>
+          <tbody>
+            <tr><td><code>orchestrator.py</code></td><td>CLI 入口、argparse、chat loop、命令分发。</td><td>命令行参数、交互式输入、输出格式有问题时。</td></tr>
+            <tr><td><code>pipeline.py</code></td><td>把 Stage A、schema gate、Stage B、writer 串成完整流水线。</td><td>想理解一次 generate/chat 的整体顺序时。</td></tr>
+            <tr><td><code>spec_builder.py</code></td><td>本地关键词 parser；必要时调用 LLM 补齐 spec。</td><td>自然语言没识别出机器人/物体，或 API fallback 行为有问题时。</td></tr>
+            <tr><td><code>presets.py</code></td><td>加载 presets、解析继承、补齐仓库事实、计算 placement。</td><td>EEF/link/joint/USD/object pose/target pose 不对时。</td></tr>
+            <tr><td><code>schema_validation.py</code></td><td>schema gate 和 jsonschema 缺失时的兜底校验。</td><td>spec 明明生成了但不能进入 generator 时。</td></tr>
+            <tr><td><code>generator_workflow.py</code></td><td>template generator、env_cfg 薄封装、注册内容、启动命令、写文件。</td><td>生成文件内容、注册 task、命令或 dry-run/write 行为有问题时。</td></tr>
+            <tr><td><code>llm_client.py</code></td><td>统一封装模型 API 调用、timeout、retry、Ark responses 支持。</td><td>API 慢、超时、返回格式异常时。</td></tr>
+            <tr><td><code>registry.py</code></td><td>skill registry 和 route_skill。</td><td>用户 prompt 没有路由到 pick_place_vr 时。</td></tr>
+            <tr><td><code>config_loader.py</code></td><td>读取 local config、环境变量、CLI override、dry-run/write gate。</td><td>API key、model、timeout、--write 行为不符合预期时。</td></tr>
+            <tr><td><code>env_utils.py</code></td><td>路径、YAML/JSON、deep_fill、缺失值判断等通用工具。</td><td>多个模块共用的底层工具行为需要改时。</td></tr>
+            <tr><td><code>starter_specs.py</code></td><td>starter spec 示例。</td><td>使用 <code>template --skill pick_place_vr</code> 时。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>orchestrator.py 现在做什么</h2>
+        <p>
+          重构后，<code>orchestrator.py</code> 只保留 CLI 相关逻辑。它不再直接知道如何算 placement、不直接渲染 env_cfg、不直接发 HTTP 请求。
+        </p>
+        <pre><code>main(argv):
+  1. build_parser() 创建 route/template/validate/generate/chat 子命令
+  2. skills_registry() 构建本地 skill registry
+  3. 根据 args.cmd 分支：
+     - route: route_skill
+     - template: starter_specs.template_pick_place_vr_spec
+     - validate: schema_validation.validate_spec
+     - generate: pipeline.run_generate_pipeline
+     - chat: run_chat_loop + pipeline.run_generate_pipeline</code></pre>
+      </section>
+
+      <section>
+        <h2>为什么这样拆</h2>
+        <table>
+          <thead><tr><th>旧问题</th><th>拆分后的变化</th></tr></thead>
+          <tbody>
+            <tr><td>所有函数都在一个文件里，继续加逻辑会越来越难读。</td><td>按职责分模块，每个文件只处理一个方向。</td></tr>
+            <tr><td>LLM 调用、template generator、writer 混在一起，边界不清。</td><td>LLM 只在 <code>llm_client.py</code> 和 spec builder fallback 里出现。</td></tr>
+            <tr><td>placement 规则和 object preset 补齐混杂在大文件中。</td><td>统一放在 <code>presets.py</code>，因为它属于仓库事实和工作空间规则。</td></tr>
+            <tr><td>生成失败时，不容易判断是路由、schema、preset、API 还是 generator 的问题。</td><td>可以按模块定位错误。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>一次 generate 的真实调用链</h2>
+        <pre><code>python my_docs/env_cfg_skills/orchestrator.py generate "帮我生成一个宇树G1抓取水瓶的遥操任务"
+  ↓
+orchestrator.main
+  ↓
+registry.resolve_skill
+  ↓
+pipeline.run_generate_pipeline
+  ↓
+spec_builder.run_spec_builder_workflow
+  - local parser 识别 unitree_g1_inspire_ftp + bottled_water_c01
+  - presets.enrich_pick_place_vr_spec 补齐 robot/object/table/placement/task id
+  - schema_validation.validate_spec 通过
+  ↓
+generator_workflow.run_generator_workflow
+  - pick_place_vr 走 template generator
+  - render_template_env_cfg 生成薄封装 env_cfg
+  - render_registered_init 生成注册内容
+  - teleop_command_for_spec 拼可复制命令
+  ↓
+generator_workflow.write_generated_files
+  - dry-run 输出 DRY_RUN 路径
+  - --write 时真实落盘</code></pre>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

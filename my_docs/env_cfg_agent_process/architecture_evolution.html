@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：开发演进与重构</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：开发演进与重构</h1>
+    <p>记录这个 skill 从单文件 orchestrator 到 template generator，再到模块化拆分的工程决策过程。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a class="active" href="./architecture_evolution.html">开发演进</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./orchestrator_code.html">代码导读</a>
+      <a href="./module_flow.html">模块与流程图</a>
+      <a href="./adaptation_test_gate.html">Adaptation / Test Gate</a>
+      <a href="./preset_enrichment.html">Preset Enrichment</a>
+      <a href="./template_generator.html">Template Generator</a>
+      <a href="./placement_workflow.html">Placement Workflow</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>最终结论</h2>
+        <p>
+          这个 skill 的核心不是“让大模型写 env_cfg”，而是把用户自然语言变成可校验的 spec，
+          再用 presets、placement workflow 和 template generator 确定性生成仓库内已有机器人任务。
+          大模型只在自然语言理解和复杂 spec 补齐阶段作为 fallback。
+        </p>
+        <div class="note">
+          当前重构目标：保持 CLI 行为不变，但把原来堆在 <code>orchestrator.py</code> 里的职责拆到多个模块。
+        </div>
+      </section>
+
+      <section>
+        <h2>阶段一：先做单文件 orchestrator</h2>
+        <p>
+          最开始我们需要快速验证“用户输入一句话，系统能路由到 skill、读 schema、补齐 spec、生成 env_cfg、注册 task、输出命令”这条闭环。
+          因此第一版把 route、config、LLM API、schema gate、generator、writer 都写在一个 <code>orchestrator.py</code> 里。
+        </p>
+        <table>
+          <thead><tr><th>优点</th><th>问题</th></tr></thead>
+          <tbody>
+            <tr><td>开发快，容易跑通端到端 demo。</td><td>函数越来越多，文件逐渐变成“入口 + LLM + preset + generator + writer”的混合体。</td></tr>
+            <tr><td>方便观察每一步输出，适合学习和探索。</td><td>继续加功能会让分支复杂，难以判断某个 bug 属于哪一层。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>阶段二：发现让模型直接写 env_cfg 不稳定</h2>
+        <p>
+          真实 API 跑通后，模型输出里出现大量 TODO，例如 EEF link、IK joints、hand joints、table USD、输出路径等。
+          这说明 schema 只约束结构，不提供仓库里的确定事实；模型不知道就只能猜或留 TODO。
+        </p>
+        <ul>
+          <li>模型容易把路径写错，例如少一层 <code>isaaclab_tasks</code>。</li>
+          <li>模型不敢确定 joint/link 顺序，因为这些必须和参考 env_cfg、teleop pipeline 对齐。</li>
+          <li>模型生成完整 env_cfg 既慢，又容易破坏已有模板里的 IK、teleop、observation、termination。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>阶段三：改成 presets + template generator</h2>
+        <p>
+          我们把机器人和物体的确定事实写进 <code>robot_presets.yml</code> 和 <code>object_presets.yml</code>。
+          对仓库已有完整模板的机器人，不再让模型写最终代码，而是让 template generator 继承已有 env_cfg，只覆盖任务相关参数。
+        </p>
+        <pre><code>用户自然语言
+  ↓
+本地 spec parser 或 AI fallback
+  ↓
+preset enrichment
+  ↓
+schema gate
+  ↓
+template generator
+  ↓
+env_cfg 薄封装 / task 注册 / 启动命令</code></pre>
+        <div class="note">
+          这个阶段的关键转变：模型从“代码作者”降级为“需求理解助手”；代码生成由程序模板负责。
+        </div>
+      </section>
+
+      <section>
+        <h2>阶段四：加入 placement workflow</h2>
+        <p>
+          后来发现 <code>object.init_state.pos</code> 不能只放在 object preset 里写死。
+          同一个水瓶换到不同机器人时，合适的摆放位置不同，应该根据机器人桌面位置和工作空间自动计算。
+        </p>
+        <table>
+          <thead><tr><th>旧方式</th><th>新方式</th></tr></thead>
+          <tbody>
+            <tr><td>object preset 直接写绝对坐标。</td><td>robot preset 提供 <code>default_placement</code>，workflow 用 <code>table_center + offset</code> 计算。</td></tr>
+            <tr><td>换机器人后可能离本体太远。</td><td>不同机器人可以配置自己的工作区偏移。</td></tr>
+            <tr><td>模型可能猜坐标。</td><td>模型只理解“靠近/居中/偏右”等意图，最终坐标由规则算。</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>阶段五：拆分 orchestrator</h2>
+        <p>
+          当 route、config、LLM、schema、presets、placement、template generator、writer 都放在一个文件里时，
+          复杂度已经不适合继续堆功能。于是我们保留 CLI 行为不变，只把内部职责拆成模块。
+        </p>
+        <pre><code>env_cfg_skills/
+  orchestrator.py          # CLI 入口和 chat loop
+  skill_types.py           # SkillDef / LlmConfig / WorkflowConfig / OrchestratorConfig
+  env_utils.py             # 路径、YAML/JSON、deep_fill 等通用工具
+  registry.py              # skill registry 和 route_skill
+  config_loader.py         # local config / env var / CLI override
+  llm_client.py            # OpenAI-compatible / Ark responses API 调用
+  schema_validation.py     # schema gate 和兜底校验
+  presets.py               # robot/object presets、placement、spec enrichment
+  spec_builder.py          # 本地 parser + AI fallback 补 spec
+  generator_workflow.py    # template generator、注册、命令、写文件
+  pipeline.py              # Stage A + Stage B 的主流水线
+  starter_specs.py         # starter spec 示例</code></pre>
+      </section>
+
+      <section>
+        <h2>拆分后的优势</h2>
+        <ul>
+          <li>职责清晰：看文件名就知道该逻辑属于哪一层。</li>
+          <li>方便扩展：后续加 H1 模板，只改 presets/template generator，不动 CLI。</li>
+          <li>方便排错：API 慢看 <code>llm_client.py</code>，坐标不对看 <code>presets.py</code>，输出文件不对看 <code>generator_workflow.py</code>。</li>
+          <li>降低模型风险：LLM 调用集中在 spec builder fallback，不会散落到代码生成路径里。</li>
+          <li>保留用户体验：命令仍然是 <code>python my_docs/env_cfg_skills/orchestrator.py generate ...</code> 或 <code>chat --enable_api</code>。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>当前推荐心智模型</h2>
+        <pre><code>orchestrator.py 只负责“接请求和分发”
+pipeline.py 负责“按 workflow 串起来”
+spec_builder.py 负责“自然语言变 spec”
+presets.py 负责“仓库事实和 placement”
+schema_validation.py 负责“能不能进入下一步”
+generator_workflow.py 负责“确定性生成代码/注册/命令”
+llm_client.py 负责“唯一的模型 API 通道”</code></pre>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

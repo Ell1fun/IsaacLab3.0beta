@@ -1,0 +1,224 @@
+# Robot preset facts extracted from existing IsaacLab task configs.
+# The orchestrator uses these facts to enrich model-generated specs before schema validation.
+
+fourier_gr1t2_high_pd:
+  display_name: FourierGR1T2
+  robot_slug: fourier_gr1t2
+  robot_cfg_import: isaaclab_assets.robots.fourier:GR1T2_HIGH_PD_CFG
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/pickplace_gr1t2_env_cfg.py
+  registration_module: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/__init__.py
+  output_dir: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place
+  supported_teleop_templates:
+    openxr_hand_tracking:
+      module: pickplace_gr1t2_env_cfg
+      class: PickPlaceGR1T2EnvCfg
+  base_link_name: base_link
+  eef_link_names:
+    left: left_hand_pitch_link
+    right: right_hand_pitch_link
+  controlled_joint_names:
+    - left_shoulder_pitch_joint
+    - left_shoulder_roll_joint
+    - left_shoulder_yaw_joint
+    - left_elbow_pitch_joint
+    - left_wrist_yaw_joint
+    - left_wrist_roll_joint
+    - left_wrist_pitch_joint
+    - right_shoulder_pitch_joint
+    - right_shoulder_roll_joint
+    - right_shoulder_yaw_joint
+    - right_elbow_pitch_joint
+    - right_wrist_yaw_joint
+    - right_wrist_roll_joint
+    - right_wrist_pitch_joint
+  hand_joint_names:
+    - L_index_proximal_joint
+    - L_middle_proximal_joint
+    - L_pinky_proximal_joint
+    - L_ring_proximal_joint
+    - L_thumb_proximal_yaw_joint
+    - R_index_proximal_joint
+    - R_middle_proximal_joint
+    - R_pinky_proximal_joint
+    - R_ring_proximal_joint
+    - R_thumb_proximal_yaw_joint
+    - L_index_intermediate_joint
+    - L_middle_intermediate_joint
+    - L_pinky_intermediate_joint
+    - L_ring_intermediate_joint
+    - L_thumb_proximal_pitch_joint
+    - R_index_intermediate_joint
+    - R_middle_intermediate_joint
+    - R_pinky_intermediate_joint
+    - R_ring_intermediate_joint
+    - R_thumb_proximal_pitch_joint
+    - L_thumb_distal_joint
+    - R_thumb_distal_joint
+  fixed_base: false
+  init_state:
+    base_pose:
+      pos: [0.0, 0.0, 0.93]
+      quat_xyzw: [0.0, 0.0, 0.7071, 0.7071]
+    joint_pos:
+      right_shoulder_pitch_joint: 0.0
+      right_shoulder_roll_joint: 0.0
+      right_shoulder_yaw_joint: 0.0
+      right_elbow_pitch_joint: -1.5708
+      right_wrist_yaw_joint: 0.0
+      right_wrist_roll_joint: 0.0
+      right_wrist_pitch_joint: 0.0
+      left_shoulder_pitch_joint: 0.0
+      left_shoulder_roll_joint: 0.0
+      left_shoulder_yaw_joint: 0.0
+      left_elbow_pitch_joint: -1.5708
+      left_wrist_yaw_joint: 0.0
+      left_wrist_roll_joint: 0.0
+      left_wrist_pitch_joint: 0.0
+    joint_vel:
+      .*: 0.0
+  idle_wrist_pose:
+    left:
+      pos: [0.0, 0.0, 0.0]
+      quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+    right:
+      pos: [0.0, 0.0, 0.0]
+      quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  default_table:
+    usd_path: ${ISAAC_NUCLEUS_DIR}/Props/PackingTable/packing_table.usd
+    pose:
+      pos: [0.0, 0.55, 0.0]
+      quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  default_placement:
+    object_xy_from_table_center: [0.0, -0.10]
+    target_xy_from_table_center: [0.25, -0.10]
+    z: 0.9996
+
+unitree_g1_inspire_ftp:
+  display_name: UnitreeG1
+  robot_slug: unitree_g1
+  robot_cfg_import: isaaclab_assets.robots.unitree:G1_INSPIRE_FTP_CFG
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/pickplace_unitree_g1_inspire_hand_env_cfg.py
+  registration_module: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/__init__.py
+  output_dir: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place
+  supported_teleop_templates:
+    openxr_hand_tracking:
+      module: pickplace_unitree_g1_inspire_hand_env_cfg
+      class: PickPlaceG1InspireFTPEnvCfg
+  base_link_name: pelvis
+  eef_link_names:
+    left: left_wrist_yaw_link
+    right: right_wrist_yaw_link
+  hand_joint_names:
+    - L_index_proximal_joint
+    - L_middle_proximal_joint
+    - L_pinky_proximal_joint
+    - L_ring_proximal_joint
+    - L_thumb_proximal_yaw_joint
+    - R_index_proximal_joint
+    - R_middle_proximal_joint
+    - R_pinky_proximal_joint
+    - R_ring_proximal_joint
+    - R_thumb_proximal_yaw_joint
+    - L_index_intermediate_joint
+    - L_middle_intermediate_joint
+    - L_pinky_intermediate_joint
+    - L_ring_intermediate_joint
+    - L_thumb_proximal_pitch_joint
+    - R_index_intermediate_joint
+    - R_middle_intermediate_joint
+    - R_pinky_intermediate_joint
+    - R_ring_intermediate_joint
+    - R_thumb_proximal_pitch_joint
+    - L_thumb_intermediate_joint
+    - R_thumb_intermediate_joint
+    - L_thumb_distal_joint
+    - R_thumb_distal_joint
+  motion_controller_adaptation:
+    reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/locomanipulation/pick_place/fixed_base_upper_body_ik_g1_env_cfg.py
+    left_controller_offset_rpy_deg: [45.0, 180.0, -90.0]
+    right_controller_offset_rpy_deg: [-135.0, 0.0, 90.0]
+    use_wrist_rotation: false
+    use_wrist_position: false
+    grasp_scalar: max_trigger_squeeze
+  fixed_base: false
+  idle_wrist_pose:
+    left:
+      pos: [0.25, 0.22, 0.95]
+      quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+    right:
+      pos: [0.25, -0.22, 0.95]
+      quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  default_table:
+    usd_path: ${ISAAC_NUCLEUS_DIR}/Props/PackingTable/packing_table.usd
+    pose:
+      pos: [0.0, 0.55, 0.0]
+      quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  default_placement:
+    object_xy_from_table_center: [0.0, -0.10]
+    target_xy_from_table_center: [0.25, -0.10]
+    z: 0.9996
+
+unitree_g1:
+  inherits: unitree_g1_inspire_ftp
+  display_name: UnitreeG1
+  robot_cfg_import: isaaclab_assets.robots.unitree:G1_CFG
+
+unitree_h1:
+  display_name: UnitreeH1
+  robot_slug: unitree_h1
+  robot_cfg_import: isaaclab_assets.robots.unitree:H1_CFG
+  reference_env_cfg: source/isaaclab_assets/isaaclab_assets/robots/unitree.py
+  registration_module: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/__init__.py
+  output_dir: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place
+  supported_teleop_templates: {}
+  base_link_name: pelvis
+  fixed_base: false
+  default_table:
+    usd_path: ${ISAAC_NUCLEUS_DIR}/Props/PackingTable/packing_table.usd
+    pose:
+      pos: [0.0, 0.55, 0.0]
+      quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  default_placement:
+    object_xy_from_table_center: [0.0, -0.10]
+    target_xy_from_table_center: [0.25, -0.10]
+    z: 0.9996
+
+seres_r11_a2_high_pd:
+  display_name: R11
+  robot_slug: r11
+  robot_cfg_import: isaaclab_assets.robots.seres_r11:R11_A2_HIGH_PD_CFG
+  urdf_path: assets/seres_r11/r11_0615.urdf
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/pickplace_seres_r11_env_cfg.py
+  registration_module: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/__init__.py
+  output_dir: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place
+  supported_teleop_templates:
+    openxr_hand_tracking:
+      module: pickplace_seres_r11_env_cfg
+      class: PickPlaceR11EnvCfg
+    openxr_controller:
+      module: pickplace_seres_r11_tri_env_cfg
+      class: PickPlaceR11TriEnvCfg
+      adaptation_reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/pickplace_seres_r11_tri_env_cfg.py
+      adaptation_reference_module: pickplace_seres_r11_tri_env_cfg
+      adaptation_reference_class: PickPlaceR11TriEnvCfg
+  base_link_name: pelvis
+  eef_link_names:
+    left: left_wrist_yaw_Link
+    right: right_wrist_yaw_Link
+  fixed_base: true
+  idle_wrist_pose:
+    left:
+      pos: [0.32, 0.22, 1.05]
+      quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+    right:
+      pos: [0.32, -0.22, 1.05]
+      quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  default_table:
+    usd_path: ${ISAAC_NUCLEUS_DIR}/Props/PackingTable/packing_table.usd
+    pose:
+      pos: [0.0, 0.55, 0.0]
+      quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  default_placement:
+    object_xy_from_table_center: [0.0, -0.10]
+    target_xy_from_table_center: [0.25, -0.10]
+    z: 0.9996
