@@ -27,6 +27,10 @@ def skills_registry() -> list[SkillDef]:
                 "方向盘",
                 "宇树",
                 "傅里叶",
+                "r11",
+                "赛力斯",
+                "赛利斯",
+                "seres",
                 "unitree",
                 "fourier",
             ),
@@ -58,5 +62,5 @@ def resolve_skill(registry: dict[str, SkillDef], user_text: str, skill_name: str
     """Resolve skill from explicit name or user text routing."""
     if skill_name:
         return registry.get(skill_name)
-    skill, _scores = route_skill(user_text)
+    skill, _ = route_skill(user_text)
     return skill

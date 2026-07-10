@@ -14,6 +14,33 @@ from skill_types import OrchestratorConfig, SkillDef
 from starter_specs import template_pick_place_vr_spec
 
 
+def format_chat_failure(output: dict[str, object]) -> str:
+    """Format blocked Stage A output as a short conversational message."""
+    compact = concise_failure_output(output)  # type: ignore[arg-type]
+    if not isinstance(compact, dict) or compact.get("stage") != "stage_a_spec_builder":
+        return dump_yaml_or_json(compact, "yml")
+
+    lines = ["需要先确认以下信息："]
+    questions = compact.get("questions", [])
+    if isinstance(questions, list):
+        for idx, question in enumerate(questions, 1):
+            lines.append(f"{idx}. {question}")
+    summary = compact.get("current_intent_summary", {})
+    if isinstance(summary, dict) and summary:
+        lines.append("")
+        lines.append("当前理解：")
+        primary = summary.get("primary_object")
+        if primary:
+            lines.append(f"- 主操作物体：{primary}")
+        scene_objects = summary.get("scene_objects")
+        if isinstance(scene_objects, list) and scene_objects:
+            lines.append(f"- 附加物体：{', '.join(str(item) for item in scene_objects)}")
+        unknown_objects = summary.get("unknown_objects")
+        if isinstance(unknown_objects, list) and unknown_objects:
+            lines.append(f"- 未知物体：{', '.join(str(item) for item in unknown_objects)}")
+    return "\n".join(lines)
+
+
 def run_chat_loop(
     *,
     registry: dict[str, SkillDef],
@@ -32,7 +59,7 @@ def run_chat_loop(
     sys.stdout.write("输入自然语言需求；输入 /quit 退出。\n")
     sys.stdout.write("提示：当前 demo 会在 spec 通过 schema gate 后自动进入 generator。\n\n")
 
-    messages: list[str] = []
+    draft_intent: dict[str, object] | None = None
     selected_skill: SkillDef | None = registry.get(skill_name) if skill_name else None
     if skill_name and selected_skill is None:
         sys.stderr.write(f"Unknown skill: {skill_name}\n")
@@ -51,10 +78,8 @@ def run_chat_loop(
         if user_text in ("/q", "/quit", "/exit"):
             return 0
 
-        messages.append(user_text)
-        combined_text = "\n".join(messages)
         if selected_skill is None:
-            selected_skill = resolve_skill(registry, combined_text, None)
+            selected_skill = resolve_skill(registry, user_text, None)
             if selected_skill is None:
                 sys.stdout.write("还没有匹配到 skill。你可以继续补充任务类型，例如 pick_place / VR / teleop。\n")
                 continue
@@ -63,10 +88,11 @@ def run_chat_loop(
         try:
             output, exit_code = run_generate_pipeline(
                 skill=selected_skill,
-                user_text=combined_text,
+                user_text=user_text,
                 cfg=cfg,
                 api_key=api_key,
                 enable_api=enable_api,
+                draft_intent=draft_intent,
             )
         except Exception as e:
             sys.stderr.write(f"Workflow failed: {e}\n")
@@ -74,10 +100,13 @@ def run_chat_loop(
 
         if exit_code == 0:
             sys.stdout.write(dump_yaml_or_json(concise_success_output(output), fmt) + "\n")
-            messages = []
+            draft_intent = None
             selected_skill = registry.get(skill_name) if skill_name else None
         else:
-            sys.stdout.write(dump_yaml_or_json(concise_failure_output(output), fmt) + "\n")
+            sys.stdout.write(format_chat_failure(output) + "\n")
+            stage_a = output.get("stage_a_spec_builder", {})
+            if isinstance(stage_a, dict) and isinstance(stage_a.get("draft_intent"), dict):
+                draft_intent = stage_a["draft_intent"]
             questions = output.get("stage_a_spec_builder", {}).get("questions", [])
             if questions:
                 sys.stdout.write("请继续回答上面的补齐问题。\n")

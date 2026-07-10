@@ -4,6 +4,11 @@
 fourier_gr1t2_high_pd:
   display_name: FourierGR1T2
   robot_slug: fourier_gr1t2
+  aliases:
+    - 傅里叶
+    - fourier
+    - gr1t2
+    - gr1
   robot_cfg_import: isaaclab_assets.robots.fourier:GR1T2_HIGH_PD_CFG
   reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/pickplace_gr1t2_env_cfg.py
   registration_module: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/__init__.py
@@ -96,6 +101,11 @@ fourier_gr1t2_high_pd:
 unitree_g1_inspire_ftp:
   display_name: UnitreeG1
   robot_slug: unitree_g1
+  aliases:
+    - 宇树
+    - unitree
+    - g1
+    - unitree g1
   robot_cfg_import: isaaclab_assets.robots.unitree:G1_INSPIRE_FTP_CFG
   reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/pickplace_unitree_g1_inspire_hand_env_cfg.py
   registration_module: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/__init__.py
@@ -148,6 +158,8 @@ unitree_g1_inspire_ftp:
     right:
       pos: [0.25, -0.22, 0.95]
       quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  reachability:
+    max_idle_wrist_to_object_distance_m: 0.85
   default_table:
     usd_path: ${ISAAC_NUCLEUS_DIR}/Props/PackingTable/packing_table.usd
     pose:
@@ -166,6 +178,10 @@ unitree_g1:
 unitree_h1:
   display_name: UnitreeH1
   robot_slug: unitree_h1
+  aliases:
+    - h1
+    - 宇树h1
+    - unitree h1
   robot_cfg_import: isaaclab_assets.robots.unitree:H1_CFG
   reference_env_cfg: source/isaaclab_assets/isaaclab_assets/robots/unitree.py
   registration_module: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/__init__.py
@@ -186,6 +202,11 @@ unitree_h1:
 seres_r11_a2_high_pd:
   display_name: R11
   robot_slug: r11
+  aliases:
+    - r11
+    - seres
+    - seres r11
+    - 赛力斯
   robot_cfg_import: isaaclab_assets.robots.seres_r11:R11_A2_HIGH_PD_CFG
   urdf_path: assets/seres_r11/r11_0615.urdf
   reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/pickplace_seres_r11_env_cfg.py
@@ -205,6 +226,24 @@ seres_r11_a2_high_pd:
   eef_link_names:
     left: left_wrist_yaw_Link
     right: right_wrist_yaw_Link
+  controlled_joint_names:
+    - torso_yaw_Joint
+    - torso_roll_Joint
+    - torso_pitch_Joint
+    - left_shoulder_pitch_Joint
+    - left_shoulder_roll_Joint
+    - left_shoulder_yaw_Joint
+    - left_elbow_pitch_Joint
+    - left_wrist_roll_Joint
+    - left_wrist_pitch_Joint
+    - left_wrist_yaw_Joint
+    - right_shoulder_pitch_Joint
+    - right_shoulder_roll_Joint
+    - right_shoulder_yaw_Joint
+    - right_elbow_pitch_Joint
+    - right_wrist_roll_Joint
+    - right_wrist_pitch_Joint
+    - right_wrist_yaw_Joint
   fixed_base: true
   idle_wrist_pose:
     left:
@@ -213,6 +252,14 @@ seres_r11_a2_high_pd:
     right:
       pos: [0.32, -0.22, 1.05]
       quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  reachability:
+    max_idle_wrist_to_object_distance_m: 0.85
+    strict_ik:
+      enabled: true
+      required: false
+      target_z_offset_m: 0.05
+      position_tolerance_m: 0.04
+      max_iterations: 80
   default_table:
     usd_path: ${ISAAC_NUCLEUS_DIR}/Props/PackingTable/packing_table.usd
     pose:

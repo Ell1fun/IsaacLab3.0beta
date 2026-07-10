@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
+from pathlib import Path
 from typing import Any
 
+from clarification_resolver import build_intent_from_llm_payload, build_or_update_intent, intent_to_spec, validate_intent
 from env_utils import read_text
 from llm_client import call_llm_chat_completion, extract_structured_object
-from presets import enrich_pick_place_vr_spec
+from object_intent import object_catalog
+from presets import enrich_pick_place_vr_spec, load_skill_presets
 from schema_validation import validate_spec
 from skill_types import OrchestratorConfig, SkillDef
 
@@ -26,32 +30,78 @@ def infer_pick_place_vr_spec_from_text(user_prompt: str) -> dict[str, Any]:
             "pico controller",
         )
     )
-    robot_preset = ""
-    if any(k in text for k in ("傅里叶", "fourier", "gr1t2", "gr1")):
-        robot_preset = "fourier_gr1t2_high_pd"
-    elif any(k in text for k in ("r11", "赛力斯", "seres")):
-        robot_preset = "seres_r11_a2_high_pd"
-    elif any(k in text for k in ("h1", "unitree h1", "宇树h1")):
-        robot_preset = "unitree_h1"
-    elif any(k in text for k in ("宇树", "unitree", "g1")):
-        robot_preset = "unitree_g1_inspire_ftp"
+    def detect_robot_preset_from_presets(prompt: str) -> str:
+        presets = load_skill_presets()
+        robots = presets.get("robots", {})
+        if not isinstance(robots, dict):
+            return ""
+        lowered = prompt.lower()
+        aliases: list[tuple[str, str]] = []
+        for preset, data in robots.items():
+            if not isinstance(preset, str) or not isinstance(data, dict):
+                continue
+            raw_aliases = data.get("aliases", [])
+            if isinstance(raw_aliases, list):
+                aliases.extend((str(alias), preset) for alias in raw_aliases if alias)
+            aliases.append((preset, preset))
+            if data.get("robot_slug"):
+                aliases.append((str(data["robot_slug"]), preset))
+            if data.get("display_name"):
+                aliases.append((str(data["display_name"]), preset))
+        aliases = [(a.lower(), p) for a, p in aliases if a]
+        aliases.sort(key=lambda item: len(item[0]), reverse=True)
+        for alias, preset in aliases:
+            if alias and alias in lowered:
+                return preset
+        return ""
 
-    object_preset = ""
-    if any(k in text for k in ("水瓶", "瓶装水", "bottle", "bottled water")):
-        object_preset = "bottled_water_c01"
-    elif any(k in text for k in ("方向盘", "steering")):
-        object_preset = "steering_wheel"
-    elif any(k in text for k in ("螺母", "nut")):
-        object_preset = "factory_m16_nut_green"
-    elif any(k in text for k in ("排气管", "exhaust")):
-        object_preset = "exhaust_pipe"
+    robot_preset = detect_robot_preset_from_presets(text)
 
-    return {
+    object_aliases: list[tuple[str, str, tuple[str, ...]]] = []
+    for preset, data in object_catalog().items():
+        if not isinstance(data, dict) or str(data.get("status", "ready")) != "ready":
+            continue
+        aliases = [str(alias) for alias in data.get("aliases", []) if alias]
+        aliases.extend([str(preset), str(data.get("object_slug", preset))])
+        object_aliases.append((str(data.get("object_slug", preset)), str(preset), tuple(aliases)))
+    mentioned_objects = [
+        (name, preset, aliases) for name, preset, aliases in object_aliases if any(alias in text for alias in aliases)
+    ]
+    object_preset = mentioned_objects[0][1] if mentioned_objects else ""
+
+    def semantic_for_object(aliases: tuple[str, ...]) -> str:
+        for alias in aliases:
+            if re.search(f"桌.{{0,16}}{re.escape(alias)}", text):
+                return "table_back"
+        for alias in aliases:
+            if re.search(f"{re.escape(alias)}.{{0,12}}左手|左手.{{0,12}}{re.escape(alias)}", text):
+                return "near_left_hand"
+            if re.search(f"{re.escape(alias)}.{{0,12}}右手|右手.{{0,12}}{re.escape(alias)}", text):
+                return "near_right_hand"
+        if any(k in text for k in ("桌上", "桌面", "table")):
+            return "table_back"
+        return "table_center"
+
+    scene_objects: list[dict[str, Any]] = []
+    for name, preset, aliases in mentioned_objects[1:]:
+        scene_objects.append(
+            {
+                "name": name,
+                "preset": preset,
+                "role": "distractor" if preset == "bottled_water_c01" else "prop",
+                "placement": {"semantic": semantic_for_object(aliases)},
+            }
+        )
+
+    spec = {
         "spec_version": "0.1",
         "task": {"family": "manager_based/manipulation/pick_place"},
         "robot": {"preset": robot_preset},
         "scene": {},
-        "object": {"preset": object_preset},
+        "object": {
+            "preset": object_preset,
+            **({"placement": {"semantic": semantic_for_object(mentioned_objects[0][2])}} if mentioned_objects else {}),
+        },
         "target": {},
         "control": {
             "mode": "motion_controller" if wants_motion_controller else "pink_ik",
@@ -63,6 +113,9 @@ def infer_pick_place_vr_spec_from_text(user_prompt: str) -> dict[str, Any]:
             },
         },
     }
+    if scene_objects:
+        spec["scene_objects"] = scene_objects
+    return spec
 
 
 def local_spec_builder(skill: SkillDef, user_prompt: str, schema: dict[str, Any]) -> dict[str, Any]:
@@ -106,6 +159,72 @@ def build_spec_builder_messages(
     ]
 
 
+def build_clarification_resolver_messages(
+    user_text: str,
+    draft_intent: dict[str, Any] | None,
+    resolver_prompt: str,
+) -> list[dict[str, str]]:
+    """Build messages for the optional LLM clarification resolver."""
+    catalog = object_catalog()
+    robot_catalog = load_skill_presets().get("robots", {})
+    slim_catalog = {
+        key: {
+            "display_name": data.get("display_name"),
+            "aliases": data.get("aliases", []),
+            "status": data.get("status", "ready"),
+            "blocked_reason": data.get("blocked_reason", ""),
+        }
+        for key, data in catalog.items()
+        if isinstance(data, dict)
+    }
+    slim_robots = {
+        key: {"display_name": data.get("display_name"), "aliases": data.get("aliases", [])}
+        for key, data in robot_catalog.items()
+        if isinstance(key, str) and isinstance(data, dict)
+    }
+    content = {
+        "user_latest_message": user_text,
+        "previous_draft_intent": draft_intent or {},
+        "robot_catalog": slim_robots,
+        "object_catalog": slim_catalog,
+    }
+    return [
+        {"role": "system", "content": resolver_prompt},
+        {"role": "user", "content": json.dumps(content, indent=2, ensure_ascii=False)},
+    ]
+
+
+def resolve_intent(
+    *,
+    user_text: str,
+    draft_intent: dict[str, Any] | None,
+    cfg: OrchestratorConfig,
+    api_key: str | None,
+    enable_api: bool,
+) -> tuple[dict[str, Any], list[str]]:
+    """Resolve the next draft intent, optionally using LLM for conversational updates."""
+    notes: list[str] = []
+    if enable_api and api_key:
+        prompt_path = Path(__file__).resolve().parent / "prompts" / "pick_place_vr_clarification_resolver.md"
+        resolver_prompt = read_text(str(prompt_path))
+        sys.stderr.write("[Stage A] Clarification Resolver: 正在调用模型更新 draft_intent...\n")
+        sys.stderr.flush()
+        try:
+            messages = build_clarification_resolver_messages(user_text, draft_intent, resolver_prompt)
+            payload_text = call_llm_chat_completion(cfg.llm, api_key=api_key, messages=messages)
+            payload = extract_structured_object(payload_text)
+            notes.append("llm clarification resolver")
+            return build_intent_from_llm_payload(user_text, payload, draft_intent), notes
+        except Exception as e:
+            sys.stderr.write(f"[Stage A] Clarification Resolver: 模型更新失败，回退到规则解析：{e}\n")
+            sys.stderr.flush()
+            notes.append("rule clarification resolver after llm failure")
+            return build_or_update_intent(user_text, draft_intent), notes
+
+    notes.append("rule clarification resolver")
+    return build_or_update_intent(user_text, draft_intent), notes
+
+
 def run_spec_builder_workflow(
     skill: SkillDef,
     user_text: str,
@@ -113,19 +232,44 @@ def run_spec_builder_workflow(
     cfg: OrchestratorConfig,
     api_key: str | None,
     enable_api: bool,
-) -> tuple[dict[str, Any], list[str], list[str], int, list[str]]:
+    draft_intent: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[str], list[str], int, list[str], dict[str, Any] | None]:
     """Run Stage A: natural language -> spec -> preset enrichment -> schema gate."""
-    spec = local_spec_builder(skill, user_text, schema)
+    resolver_notes: list[str] = []
+    if skill.name == "pick_place_vr":
+        intent, resolver_notes = resolve_intent(
+            user_text=user_text,
+            draft_intent=draft_intent,
+            cfg=cfg,
+            api_key=api_key,
+            enable_api=enable_api,
+        )
+        intent_errors, intent_questions = validate_intent(intent)
+        if intent_errors:
+            return (
+                {"spec_version": "0.1", "task": {"family": "manager_based/manipulation/pick_place"}},
+                intent_errors,
+                intent_questions,
+                0,
+                resolver_notes + ["intent safety gate"],
+                intent,
+            )
+        spec = intent_to_spec(intent)
+    else:
+        spec = local_spec_builder(skill, user_text, schema)
+
     enrichment_notes: list[str] = []
     if skill.name == "pick_place_vr":
         spec, enrichment_notes = enrich_pick_place_vr_spec(spec)
     errors = validate_spec(skill, spec, schema)
     if not errors:
-        enrichment_notes = ["local spec parser"] + enrichment_notes
-        return spec, [], [], 0, enrichment_notes
+        enrichment_notes = (resolver_notes if skill.name == "pick_place_vr" else ["local spec parser"]) + enrichment_notes
+        return spec, [], [], 0, enrichment_notes, intent if skill.name == "pick_place_vr" else None
 
     if not enable_api:
-        return spec, errors, derive_questions_from_validation_errors(errors), 0, enrichment_notes
+        return spec, errors, derive_questions_from_validation_errors(errors), 0, enrichment_notes, (
+            intent if skill.name == "pick_place_vr" else None
+        )
     if not api_key:
         raise RuntimeError(f"Missing API key env var: {cfg.llm.api_key_env}")
 
@@ -147,9 +291,9 @@ def run_spec_builder_workflow(
                 sys.stderr.flush()
         errors = validate_spec(skill, draft_spec, schema)
         if not errors:
-            return draft_spec, [], [], i, enrichment_notes
+            return draft_spec, [], [], i, enrichment_notes, intent if skill.name == "pick_place_vr" else None
         sys.stderr.write(f"[Stage A] Spec Builder {i}/{max_iterations}: schema 未通过（{len(errors)} 条），继续补齐...\n")
         sys.stderr.flush()
 
     questions = derive_questions_from_validation_errors(errors)
-    return draft_spec or {}, errors, questions, max_iterations, enrichment_notes
+    return draft_spec or {}, errors, questions, max_iterations, enrichment_notes, intent if skill.name == "pick_place_vr" else None

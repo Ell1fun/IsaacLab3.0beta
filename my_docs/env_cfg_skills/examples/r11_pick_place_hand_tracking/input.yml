@@ -1,10 +1,10 @@
 spec_version: "0.1"
 task:
   family: manager_based/manipulation/pick_place
-  variant: r11_hand_tracking_demo
-  generated_file_stem: auto_pickplace_r11_steering_wheel_teleop_env_cfg
-  gym_id: Isaac-Auto-PickPlace-R11-SteeringWheel-Teleop-v0
-  notes: R11 双臂 hand tracking pick_place 示例 spec，用于验证 schema 表达能力。
+  variant: r11_steering_wheel_hand_tracking_teleop
+  generated_file_stem: auto_pickplace_r11_steering_wheel_hand_tracking_teleop_env_cfg
+  gym_id: Isaac-Auto-PickPlace-R11-SteeringWheel-HandTracking-Teleop-v0
+  notes: R11 hand tracking example generated from current presets.
 robot:
   preset: seres_r11_a2_high_pd
   robot_cfg_import: isaaclab_assets.robots.seres_r11:R11_A2_HIGH_PD_CFG
@@ -13,32 +13,6 @@ robot:
   eef_link_names:
     left: left_wrist_yaw_Link
     right: right_wrist_yaw_Link
-  controlled_joint_names:
-    - left_shoulder_pitch_Joint
-    - left_shoulder_roll_Joint
-    - left_shoulder_yaw_Joint
-    - left_elbow_pitch_Joint
-    - left_wrist_roll_Joint
-    - left_wrist_pitch_Joint
-    - left_wrist_yaw_Joint
-    - right_shoulder_pitch_Joint
-    - right_shoulder_roll_Joint
-    - right_shoulder_yaw_Joint
-    - right_elbow_pitch_Joint
-    - right_wrist_roll_Joint
-    - right_wrist_pitch_Joint
-    - right_wrist_yaw_Joint
-  hand_joint_names:
-    - left_index_proximal_joint
-    - left_middle_proximal_joint
-    - left_pinky_proximal_joint
-    - left_ring_proximal_joint
-    - left_thumb_metacarpal_joint
-    - right_index_proximal_joint
-    - right_middle_proximal_joint
-    - right_pinky_proximal_joint
-    - right_ring_proximal_joint
-    - right_thumb_metacarpal_joint
   fixed_base: true
   idle_wrist_pose:
     left:
@@ -51,34 +25,30 @@ scene:
   ground:
     kind: ground_plane
   table:
-    usd_path: "${ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd"
+    usd_path: ${ISAAC_NUCLEUS_DIR}/Props/PackingTable/packing_table.usd
     pose:
-      pos: [0.6, 0.0, 0.0]
+      pos: [0.0, 0.55, 0.0]
       quat_xyzw: [0.0, 0.0, 0.0, 1.0]
 object:
   preset: steering_wheel
-  usd_path: "TODO: object usd path"
+  usd_path: ${ISAACLAB_NUCLEUS_DIR}/Mimic/pick_place_task/pick_place_assets/steering_wheel.usd
   pose:
-    pos: [0.6, 0.0, 0.8]
+    pos: [0.0, 0.45, 0.9996]
     quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  scale: [0.75, 0.75, 0.75]
   single_rigid_body: true
 target:
   pose:
-    pos: [0.6, 0.25, 0.8]
+    pos: [0.25, 0.45, 0.9996]
     quat_xyzw: [0.0, 0.0, 0.0, 1.0]
 control:
   mode: pink_ik
-  gravity_compensation: true
   teleop:
     enabled: true
     input_source: openxr_hand_tracking
     world_T_anchor:
       pos: [0.0, 0.0, 0.0]
       quat_xyzw: [0.0, 0.0, 0.0, 1.0]
-    rebase: true
-    hand:
-      mode: dexpilot
-      dexpilot_config_path: assets/seres_r11/revo2_left_hand_dexpilot.yml
 mdp:
   terminations:
     timeout_s: 30.0

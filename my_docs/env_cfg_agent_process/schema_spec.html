@@ -27,6 +27,7 @@
       <a href="./template_generator.html">Template Generator</a>
       <a href="./placement_workflow.html">Placement Workflow</a>
       <a href="./skill_files.html">Skill 文件</a>
+      <a href="./dev_log.html">开发日志</a>
       <a href="./roadmap.html">落地路线</a>
     </nav>
 
@@ -50,16 +51,20 @@
       <section>
         <h2>Schema 负责约束什么</h2>
         <ul>
-          <li>允许哪些字段，例如 <code>robot</code>、<code>scene</code>、<code>object</code>、<code>target</code>、<code>control</code>。</li>
+          <li>允许哪些字段，例如 <code>robot</code>、<code>scene</code>、<code>object</code>、<code>scene_objects</code>、<code>target</code>、<code>control</code>。</li>
           <li>字段类型是什么，例如字符串、数字、布尔、数组、pose7。</li>
           <li>哪些字段是必填，例如 <code>robot.preset</code>、<code>scene.table</code>、<code>control.mode</code>。</li>
-          <li>哪些值允许出现，例如 <code>robot.preset</code> 只能选当前支持的人形机器人预设。</li>
+          <li>哪些值允许出现；对 <code>robot.preset</code> / <code>object.preset</code>，运行时允许值由 presets 文件注入。</li>
           <li>条件必填，例如启用 teleop 时必须补齐 <code>world_T_anchor</code> 和 idle wrist pose。</li>
         </ul>
       </section>
 
       <section>
         <h2>当前支持的人形机器人预设</h2>
+        <p>
+          下面的列表来自当前 <code>env_cfg_skills/presets/robot_presets.yml</code>。
+          磁盘上的 schema 只保留 <code>enum: []</code> 占位，校验时由 <code>schema_validation.py</code> 从 presets 动态注入允许值。
+        </p>
         <table>
           <thead><tr><th>robot.preset</th><th>robot cfg</th><th>定位</th></tr></thead>
           <tbody>
@@ -68,8 +73,6 @@
             <tr><td><code>unitree_g1_inspire_ftp</code></td><td><code>isaaclab_assets.robots.unitree:G1_INSPIRE_FTP_CFG</code></td><td>G1 + Inspire 手部样例基础。</td></tr>
             <tr><td><code>unitree_g1</code></td><td><code>isaaclab_assets.robots.unitree:G1_CFG</code></td><td>G1 人形本体。</td></tr>
             <tr><td><code>unitree_h1</code></td><td><code>isaaclab_assets.robots.unitree:H1_CFG</code></td><td>H1 人形本体。</td></tr>
-            <tr><td><code>mujoco_humanoid</code></td><td><code>isaaclab_assets.robots.humanoid:HUMANOID_CFG</code></td><td>经典 humanoid 示例。</td></tr>
-            <tr><td><code>mujoco_humanoid_28</code></td><td><code>isaaclab_assets.robots.humanoid_28:HUMANOID_28_CFG</code></td><td>28-DOF humanoid 示例。</td></tr>
           </tbody>
         </table>
       </section>
@@ -108,7 +111,8 @@ Spec 通过 gate，进入 Generator</code></pre>
       <section>
         <h2>当前支持的物体预设</h2>
         <p>
-          对 pick_place 任务来说，抓取物体也需要约束成 enum。这样模型不会随便编一个不存在的 USD 路径。
+          对 pick_place 任务来说，抓取物体也需要约束成 enum。运行时 enum 来自
+          <code>env_cfg_skills/presets/object_presets.yml</code>，这样模型不会随便编一个不存在的 USD 路径。
         </p>
         <table>
           <thead><tr><th>object.preset</th><th>来源</th><th>说明</th></tr></thead>
@@ -120,7 +124,29 @@ Spec 通过 gate，进入 Generator</code></pre>
           </tbody>
         </table>
         <div class="note">
-          如果用户说的物体不在 enum 里，当前 skill 不应编造路径；应追问用户是否改用已有 preset，或进入后续“用户给 USD 生成资产”的独立 skill。
+          如果用户说的物体不在 presets 里，当前 skill 不应编造路径；应追问用户是否改用已有 preset，或进入后续“用户给 USD 生成资产”的独立 skill。
+        </div>
+      </section>
+
+      <section>
+        <h2>多物体 Scene Objects</h2>
+        <p>
+          当前 schema 支持可选的 <code>scene_objects</code>，用于把额外物体摆到桌面上。
+          这些物体只作为 props/distractors/obstacles 出现在场景里，不参与主 pick-place 的 success、termination 或 target。
+        </p>
+        <pre><code>object:
+  preset: steering_wheel
+  placement:
+    semantic: near_right_hand
+
+scene_objects:
+  - name: bottled_water
+    preset: bottled_water_c01
+    role: distractor
+    placement:
+      semantic: table_back</code></pre>
+        <div class="note">
+          如果用户希望多个物体都被抓取并分别判定成功，需要进入后续阶段 C：多主物体任务。当前阶段仍保持一个主 <code>object</code>。
         </div>
       </section>
 

@@ -29,6 +29,7 @@
       <a href="./placement_workflow.html">Placement Workflow</a>
       <a href="./skill_files.html">Skill 文件</a>
       <a class="active" href="./presets_prompts.html">Presets & Prompts</a>
+      <a href="./dev_log.html">开发日志</a>
       <a href="./roadmap.html">落地路线</a>
     </nav>
 
@@ -162,6 +163,9 @@
           <thead><tr><th>字段</th><th>用途</th><th>是否建议必填</th></tr></thead>
           <tbody>
             <tr><td><code>display_name</code>、<code>object_slug</code></td><td>用于自动命名与文件 stem。</td><td>建议必填</td></tr>
+            <tr><td><code>aliases</code></td><td>Clarification Resolver 和 Intent Safety Gate 用来从自然语言识别、删除或替换物体，例如“方向盘”“水瓶”。</td><td>建议必填</td></tr>
+            <tr><td><code>description</code></td><td>追问用户时展示的说明，帮助用户从已有 presets 中选择。</td><td>推荐</td></tr>
+            <tr><td><code>status</code>、<code>blocked_reason</code></td><td>标记 preset 是否可直接生成；非 <code>ready</code> 会在 Stage A 被 clarification gate 阻断。</td><td>建议必填</td></tr>
             <tr><td><code>usd_path</code></td><td>spawn 物体资产路径；若为 TODO 必须阻断。</td><td>建议必填</td></tr>
             <tr><td><code>scale</code></td><td>物体缩放。</td><td>推荐</td></tr>
             <tr><td><code>mass</code></td><td>当使用 single rigid body wrapper 时用于质量属性。</td><td>可选</td></tr>
@@ -178,6 +182,37 @@
       </section>
 
       <section>
+        <h2>placement_presets.yml：字段清单</h2>
+        <p>
+          <code>placement_presets.yml</code> 负责把“左手附近、右手附近、桌子后方”等语义位置变成相对桌面中心的确定性 offset。
+          它不描述机器人本体，也不描述物体资产；它只描述布局规则。
+        </p>
+        <table>
+          <thead><tr><th>字段</th><th>用途</th><th>是否建议必填</th></tr></thead>
+          <tbody>
+            <tr><td><code>inherits</code></td><td>继承默认语义摆放点，机器人可以只覆盖差异。</td><td>推荐</td></tr>
+            <tr><td><code>named_placements</code></td><td>语义摆放点集合，例如 <code>near_left_hand</code>、<code>near_right_hand</code>、<code>table_back</code>。</td><td>建议必填</td></tr>
+            <tr><td><code>xy_from_table_center</code></td><td>相对 <code>robot.default_table.pose.pos</code> 的 XY 偏移。</td><td>建议必填</td></tr>
+            <tr><td><code>z_mode</code></td><td>当前主要使用 <code>tabletop</code>，表示 z 来自 robot/object 默认桌面高度。</td><td>推荐</td></tr>
+            <tr><td><code>yaw</code></td><td>生成默认朝向时的 yaw [rad]；物体 preset 的 <code>default_quat_xyzw</code> 优先。</td><td>可选</td></tr>
+            <tr><td><code>assigned_hand</code></td><td>给 validator/文档表达该语义点更靠近哪只手。</td><td>可选</td></tr>
+            <tr><td><code>min_spacing</code></td><td>未来物体间距检查使用；当前作为布局事实保留。</td><td>可选</td></tr>
+          </tbody>
+        </table>
+        <pre><code>default:
+  named_placements:
+    near_left_hand:
+      xy_from_table_center: [0.0, 0.12]
+      z_mode: tabletop
+    near_right_hand:
+      xy_from_table_center: [0.0, -0.12]
+      z_mode: tabletop
+
+unitree_g1_inspire_ftp:
+  inherits: default</code></pre>
+      </section>
+
+      <section>
         <h2>Prompts：总原则</h2>
         <ul>
           <li><b>prompt 是“行为规范”</b>：告诉模型怎么填 spec、怎么输出 JSON、什么时候必须阻断。</li>
@@ -191,6 +226,13 @@
         <table>
           <thead><tr><th>文件</th><th>何时会用</th><th>输入</th><th>输出</th><th>边界</th></tr></thead>
           <tbody>
+            <tr>
+              <td><code>pick_place_vr_clarification_resolver.md</code></td>
+              <td>Stage A 开启 <code>--enable_api</code> 时，优先用于多轮对话理解。</td>
+              <td>用户最新回答 + 上一轮 <code>draft_intent</code> + object catalog。</td>
+              <td>结构化 intent patch/full intent，例如主物体 key、附加物体 key、删除物体 key。</td>
+              <td>不输出 spec/env_cfg；输出仍必须经过 presets hydrate 和 safety gate。</td>
+            </tr>
             <tr>
               <td><code>pick_place_vr_spec_builder.md</code></td>
               <td>Stage A schema gate 失败且开启 <code>--enable_api</code> 时。</td>
@@ -227,7 +269,8 @@
         <h2>新增一个 robot/object preset 的最小步骤</h2>
         <ol>
           <li>在 <code>presets/robot_presets.yml</code> 或 <code>presets/object_presets.yml</code> 增加条目。</li>
-          <li>同步更新 <code>schemas/pick_place_vr_spec.schema.yml</code> 的 enum（让 <code>robot.preset</code>/<code>object.preset</code> 可选）。</li>
+          <li>不需要手动同步 schema enum；运行时 <code>schema_validation.py</code> 会从 presets keys 注入 <code>robot.preset</code>/<code>object.preset</code> 的允许值。</li>
+          <li>如果新增机器人有不同工作空间，在 <code>presets/placement_presets.yml</code> 继承默认 placement 并覆盖差异。</li>
           <li>补一个 examples 输入（可选但强烈建议），避免后续回归时忘掉预期。</li>
           <li>如果新增的是 motion controller 支持：尽量提供本机器人 <code>motion_controller_adaptation</code> 的参考与 offsets；否则应明确 blocked。</li>
         </ol>

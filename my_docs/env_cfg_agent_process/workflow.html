@@ -28,6 +28,7 @@
       <a href="./template_generator.html">Template Generator</a>
       <a href="./placement_workflow.html">Placement Workflow</a>
       <a href="./skill_files.html">Skill 文件</a>
+      <a href="./dev_log.html">开发日志</a>
       <a href="./roadmap.html">落地路线</a>
     </nav>
 
@@ -35,13 +36,13 @@
       <section>
         <h2>两阶段 Workflow</h2>
         <p>
-          生成 env_cfg 不建议一步到位。更稳定的方式是两阶段：先补齐 spec，再用 spec 进入模板生成器。
+          生成 env_cfg 不建议一步到位。更稳定的方式是两阶段：先维护用户意图并补齐 spec，再用 spec 进入模板生成器。
           对仓库里已有完整模板的机器人，Stage B 不再让大模型写代码，而是由程序确定性生成。
         </p>
         <div class="grid">
           <div class="card">
             <b>Stage A：Spec Builder</b>
-            <span>本地解析或 AI：自然语言 → 粗 spec → preset enrichment → schema 校验 → 缺字段追问。</span>
+            <span>对话 resolver：用户最新回答 → draft intent → 安全 gate → 粗 spec → preset enrichment → schema 校验。</span>
           </div>
           <div class="card">
             <b>Stage B：Template Generator</b>
@@ -56,16 +57,20 @@
 2. Router 选择 skill：pick_place_vr
 3. 加载 schema / prompt / checklist
 4. Spec Builder loop
-   4.1 优先本地解析仓库内 preset 需求
-   4.2 本地解析不够时，才调用 AI 生成或更新 spec
-   4.3 Orchestrator 根据 robot/object presets 自动补齐仓库确定事实
-   4.4 Placement Workflow 根据 robot.default_placement 自动计算 object.pose / target.pose
-   4.5 Orchestrator 用 schema 校验
-   4.6 不通过：把错误转成追问，继续对话
-   4.7 通过：冻结 spec，进入 Template Generator
+   4.1 Clarification Resolver：用用户最新回答更新 draft_intent；开启 API 时先由模型输出 intent patch，失败或未开启时回退规则解析
+   4.2 Intent Safety Gate：检查未知物体、blocked preset、多主物体歧义
+   4.3 如果需要澄清：保存 draft_intent，返回 questions，不进入 generator
+   4.4 intent 通过后转换成粗 spec
+   4.5 本地 spec 不够时，才调用 AI 生成或更新 spec
+   4.6 Orchestrator 根据 robot/object/placement presets 自动补齐仓库确定事实
+   4.7 Placement Workflow 计算主 object.pose / target.pose
+   4.8 如果有 scene_objects，根据 placement.semantic 计算附加物体 pose
+   4.9 Orchestrator 用 schema 校验
+   4.10 不通过：把错误转成追问，继续对话
+   4.11 通过：冻结 spec，进入 Template Generator
 5. Template Generator
    5.1 根据 spec + presets 选择仓库已有 env_cfg 模板
-   5.2 程序生成薄封装 env_cfg、task 注册和启动命令
+   5.2 程序生成薄封装 env_cfg、附加 scene objects、task 注册和启动命令
 6. Post Validation
    6.1 检查 import、文件路径、joint/link、action 维度、task 注册
    6.2 失败则阻断交付，优先修模板或 preset
@@ -80,7 +85,10 @@
         <table>
           <thead><tr><th>Gate</th><th>检查对象</th><th>失败后怎么处理</th></tr></thead>
           <tbody>
-            <tr><td><b>Preset Enrichment</b></td><td>根据 <code>robot.preset</code> / <code>object.preset</code> 自动补齐 EEF、关节、资产路径和自动命名。</td><td>如果 preset 不存在或仍是 TODO，保留错误给 Schema/Asset Gate。</td></tr>
+            <tr><td><b>Clarification Resolver</b></td><td>用户最新回答与上一轮 <code>draft_intent</code>，例如“不要水管了”“排气管也不要了”。开启 API 时使用 <code>pick_place_vr_clarification_resolver.md</code> 让模型输出结构化 intent patch。</td><td>更新 intent，而不是重新扫描全部历史文本；如果模型调用失败则回退规则解析。</td></tr>
+            <tr><td><b>Intent Safety Gate</b></td><td>更新后的 intent：主物体是否唯一、未知物体是否存在、preset 是否 ready。</td><td>返回追问：选择主物体、改用已有 preset、提供 USD 新增 preset 或移除未知物体。</td></tr>
+            <tr><td><b>Preset Enrichment</b></td><td>根据 <code>robot.preset</code> / <code>object.preset</code> / <code>scene_objects[].preset</code> 自动补齐 EEF、关节、资产路径和自动命名。</td><td>如果 preset 不存在或仍是 TODO，保留错误给 Schema/Asset Gate。</td></tr>
+            <tr><td><b>Placement Gate</b></td><td>把 <code>placement.semantic</code> 映射到 <code>object.pose</code> 和 <code>scene_objects[].pose</code>。</td><td>未知语义位置或无法计算 pose 时阻断，不让模型猜坐标。</td></tr>
             <tr><td><b>Schema Gate</b></td><td>Spec 是否满足 schema。</td><td>不进入代码生成，转成追问让用户补齐。</td></tr>
             <tr><td><b>Asset Gate</b></td><td>robot cfg、USD/URDF、link/joint 是否存在。</td><td>提示缺失文件或名称不匹配。</td></tr>
             <tr><td><b>Action Gate</b></td><td>teleop pipeline 输出维度是否等于 ActionsCfg 解析维度。</td><td>阻断交付，要求修 action layout。</td></tr>

@@ -3,6 +3,12 @@
 steering_wheel:
   display_name: SteeringWheel
   object_slug: steering_wheel
+  aliases:
+    - 方向盘
+    - steering wheel
+    - steering
+  description: 方向盘类抓取物体，当前 pick_place teleop 的主要已验证物体。
+  status: ready
   usd_path: ${ISAACLAB_NUCLEUS_DIR}/Mimic/pick_place_task/pick_place_assets/steering_wheel.usd
   pose:
     pos: [-0.45, 0.45, 0.9996]
@@ -16,6 +22,13 @@ steering_wheel:
 bottled_water_c01:
   display_name: BottledWaterC01
   object_slug: bottled_water_c01
+  aliases:
+    - 水瓶
+    - 瓶装水
+    - bottle
+    - bottled water
+  description: SimReady 瓶装水资产，可作为主物体或附加 distractor。
+  status: ready
   usd_path: ${ISAAC_NUCLEUS_DIR}/SimReady/Residential/Kitchen/Food/Beverages/Bottled_Water_C01/sm_food_beverage_bottledWater_c01_01.usd
   pose:
     pos: [-0.45, 0.45, 0.9996]
@@ -29,6 +42,13 @@ bottled_water_c01:
 factory_m16_nut_green:
   display_name: FactoryM16NutGreen
   object_slug: factory_m16_nut_green
+  aliases:
+    - 螺母
+    - M16 螺母
+    - factory nut
+    - nut
+  description: 绿色 M16 螺母资产，来自 nut pour 任务。
+  status: ready
   usd_path: ${ISAACLAB_NUCLEUS_DIR}/Mimic/nut_pour_task/nut_pour_assets/factory_m16_nut_green.usd
   pose:
     pos: [-0.45, 0.45, 0.9996]
@@ -42,13 +62,285 @@ factory_m16_nut_green:
 exhaust_pipe:
   display_name: ExhaustPipe
   object_slug: exhaust_pipe
+  aliases:
+    - 排气管
+    - exhaust pipe
+    - exhaust
+  description: GR1T2 exhaust pipe 任务资产，来自 exhaust pipe pick-place 任务。
+  status: ready
   reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/exhaustpipe_gr1t2_base_env_cfg.py
-  usd_path: "TODO: resolve from exhaustpipe_gr1t2_base_env_cfg.py before final generation"
+  usd_path: ${ISAACLAB_NUCLEUS_DIR}/Mimic/exhaust_pipe_task/exhaust_pipe_assets/blue_exhaust_pipe.usd
   pose:
     pos: [-0.45, 0.45, 0.9996]
     quat_xyzw: [0.0, 0.0, 0.0, 1.0]
   scale: [1.0, 1.0, 1.0]
   single_rigid_body: true
+  role_hints:
+    - primary_object
+    - prop
   default_target_pose:
     pos: [0.45, 0.45, 0.9996]
     quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+
+blue_block:
+  display_name: BlueBlock
+  object_slug: blue_block
+  aliases:
+    - 蓝色方块
+    - 蓝色积木
+    - blue block
+  description: Isaac Props Blocks 蓝色方块资产，来自 stack 任务引用。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/stack/config/franka/stack_ik_rel_env_cfg.py
+  usd_path: ${ISAAC_NUCLEUS_DIR}/Props/Blocks/blue_block.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - primary_object
+    - prop
+
+red_block:
+  display_name: RedBlock
+  object_slug: red_block
+  aliases:
+    - 红色方块
+    - 红色积木
+    - red block
+  description: Isaac Props Blocks 红色方块资产，来自 stack 任务引用。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/stack/config/franka/stack_ik_rel_env_cfg.py
+  usd_path: ${ISAAC_NUCLEUS_DIR}/Props/Blocks/red_block.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - primary_object
+    - prop
+
+green_block:
+  display_name: GreenBlock
+  object_slug: green_block
+  aliases:
+    - 绿色方块
+    - 绿色积木
+    - green block
+  description: Isaac Props Blocks 绿色方块资产，来自 stack 任务引用。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/stack/config/franka/stack_ik_rel_env_cfg.py
+  usd_path: ${ISAAC_NUCLEUS_DIR}/Props/Blocks/green_block.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - primary_object
+    - prop
+
+yellow_block:
+  display_name: YellowBlock
+  object_slug: yellow_block
+  aliases:
+    - 黄色方块
+    - 黄色积木
+    - yellow block
+  description: Isaac Props Blocks 黄色方块资产，来自 stack instance randomize 任务引用。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/stack/config/franka/stack_joint_pos_instance_randomize_env_cfg.py
+  usd_path: ${ISAAC_NUCLEUS_DIR}/Props/Blocks/yellow_block.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - primary_object
+    - prop
+
+dex_cube:
+  display_name: DexCube
+  object_slug: dex_cube
+  aliases:
+    - 灵巧方块
+    - dex cube
+    - dexcube
+  description: DexCube in-hand manipulation 资产，适合作为小型可抓取立方体。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/inhand/inhand_env_cfg.py
+  usd_path: ${ISAAC_NUCLEUS_DIR}/Props/Blocks/DexCube/dex_cube_instanceable.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - primary_object
+    - prop
+
+mug:
+  display_name: Mug
+  object_slug: mug
+  aliases:
+    - 杯子
+    - 马克杯
+    - mug
+    - cup
+  description: IsaacLab Mug 资产，来自 place upright mug 任务引用。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/place/config/agibot/place_upright_mug_rmp_rel_env_cfg.py
+  usd_path: ${ISAACLAB_NUCLEUS_DIR}/Objects/Mug/mug.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - primary_object
+    - prop
+
+toy_truck:
+  display_name: ToyTruck
+  object_slug: toy_truck
+  aliases:
+    - 玩具卡车
+    - 小卡车
+    - toy truck
+    - truck
+  description: IsaacLab ToyTruck 资产，来自 place toy2box 任务引用。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/place/config/agibot/place_toy2box_rmp_rel_env_cfg.py
+  usd_path: ${ISAACLAB_NUCLEUS_DIR}/Objects/ToyTruck/toy_truck.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - primary_object
+    - prop
+
+box:
+  display_name: Box
+  object_slug: box
+  aliases:
+    - 盒子
+    - 箱子
+    - box
+  description: IsaacLab Box 资产，来自 place toy2box 任务引用，适合作为附加容器物体。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/place/config/agibot/place_toy2box_rmp_rel_env_cfg.py
+  usd_path: ${ISAACLAB_NUCLEUS_DIR}/Objects/Box/box.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - prop
+    - container
+
+sorting_bin_blue:
+  display_name: SortingBinBlue
+  object_slug: sorting_bin_blue
+  aliases:
+    - 蓝色分拣盒
+    - 蓝色料盒
+    - blue sorting bin
+    - sorting bin
+  description: 蓝色 sorting bin 资产，来自 nut pour 任务引用。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/nutpour_gr1t2_base_env_cfg.py
+  usd_path: ${ISAACLAB_NUCLEUS_DIR}/Mimic/nut_pour_task/nut_pour_assets/sorting_bin_blue.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - prop
+    - container
+
+sorting_bowl_yellow:
+  display_name: SortingBowlYellow
+  object_slug: sorting_bowl_yellow
+  aliases:
+    - 黄色分拣碗
+    - 黄色碗
+    - yellow sorting bowl
+    - sorting bowl
+  description: 黄色 sorting bowl 资产，来自 nut pour 任务引用。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/nutpour_gr1t2_base_env_cfg.py
+  usd_path: ${ISAACLAB_NUCLEUS_DIR}/Mimic/nut_pour_task/nut_pour_assets/sorting_bowl_yellow.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - prop
+    - container
+
+sorting_beaker_red:
+  display_name: SortingBeakerRed
+  object_slug: sorting_beaker_red
+  aliases:
+    - 红色烧杯
+    - 红色分拣杯
+    - red sorting beaker
+    - sorting beaker
+  description: 红色 sorting beaker 资产，来自 nut pour 任务引用。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/nutpour_gr1t2_base_env_cfg.py
+  usd_path: ${ISAACLAB_NUCLEUS_DIR}/Mimic/nut_pour_task/nut_pour_assets/sorting_beaker_red.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - prop
+    - container
+
+sorting_scale:
+  display_name: SortingScale
+  object_slug: sorting_scale
+  aliases:
+    - 分拣秤
+    - 秤
+    - sorting scale
+    - scale
+  description: sorting scale 资产，来自 nut pour 任务引用，适合作为桌面附加道具。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/nutpour_gr1t2_base_env_cfg.py
+  usd_path: ${ISAACLAB_NUCLEUS_DIR}/Mimic/nut_pour_task/nut_pour_assets/sorting_scale.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - prop
+
+factory_gear_small:
+  display_name: FactoryGearSmall
+  object_slug: factory_gear_small
+  aliases:
+    - 小齿轮
+    - 小号齿轮
+    - small gear
+    - factory gear small
+  description: Factory 小号齿轮资产，来自 gear assembly 任务引用。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/deploy/gear_assembly/gear_assembly_env_cfg.py
+  usd_path: ${ISAAC_NUCLEUS_DIR}/Props/Factory/gear_assets/factory_gear_small/factory_gear_small.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - primary_object
+    - prop
+
+factory_gear_medium:
+  display_name: FactoryGearMedium
+  object_slug: factory_gear_medium
+  aliases:
+    - 中齿轮
+    - 中号齿轮
+    - medium gear
+    - factory gear medium
+  description: Factory 中号齿轮资产，来自 gear assembly 任务引用。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/deploy/gear_assembly/gear_assembly_env_cfg.py
+  usd_path: ${ISAAC_NUCLEUS_DIR}/Props/Factory/gear_assets/factory_gear_medium/factory_gear_medium.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - primary_object
+    - prop
+
+factory_gear_large:
+  display_name: FactoryGearLarge
+  object_slug: factory_gear_large
+  aliases:
+    - 大齿轮
+    - 大号齿轮
+    - large gear
+    - factory gear large
+  description: Factory 大号齿轮资产，来自 gear assembly 任务引用。
+  status: ready
+  reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/deploy/gear_assembly/gear_assembly_env_cfg.py
+  usd_path: ${ISAAC_NUCLEUS_DIR}/Props/Factory/gear_assets/factory_gear_large/factory_gear_large.usd
+  scale: [1.0, 1.0, 1.0]
+  single_rigid_body: true
+  role_hints:
+    - primary_object
+    - prop

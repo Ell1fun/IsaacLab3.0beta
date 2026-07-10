@@ -19,7 +19,7 @@ from .pickplace_seres_r11_env_cfg import SingleRigidBodyUsdFileCfg
 
 
 G1_HAND_OPEN_POSE = {'L_index_proximal_joint': 0.0, 'L_middle_proximal_joint': 0.0, 'L_pinky_proximal_joint': 0.0, 'L_ring_proximal_joint': 0.0, 'L_thumb_proximal_yaw_joint': 0.0, 'R_index_proximal_joint': 0.0, 'R_middle_proximal_joint': 0.0, 'R_pinky_proximal_joint': 0.0, 'R_ring_proximal_joint': 0.0, 'R_thumb_proximal_yaw_joint': 0.0, 'L_index_intermediate_joint': 0.0, 'L_middle_intermediate_joint': 0.0, 'L_pinky_intermediate_joint': 0.0, 'L_ring_intermediate_joint': 0.0, 'L_thumb_proximal_pitch_joint': 0.0, 'R_index_intermediate_joint': 0.0, 'R_middle_intermediate_joint': 0.0, 'R_pinky_intermediate_joint': 0.0, 'R_ring_intermediate_joint': 0.0, 'R_thumb_proximal_pitch_joint': 0.0, 'L_thumb_intermediate_joint': 0.0, 'R_thumb_intermediate_joint': 0.0, 'L_thumb_distal_joint': 0.0, 'R_thumb_distal_joint': 0.0}
-G1_HAND_CLOSED_POSE = {'L_index_proximal_joint': 1.2, 'L_middle_proximal_joint': 1.2, 'L_pinky_proximal_joint': 1.2, 'L_ring_proximal_joint': 1.2, 'L_thumb_proximal_yaw_joint': 0.3, 'R_index_proximal_joint': 1.2, 'R_middle_proximal_joint': 1.2, 'R_pinky_proximal_joint': 1.2, 'R_ring_proximal_joint': 1.2, 'R_thumb_proximal_yaw_joint': 0.3, 'L_index_intermediate_joint': 1.2, 'L_middle_intermediate_joint': 1.2, 'L_pinky_intermediate_joint': 1.2, 'L_ring_intermediate_joint': 1.2, 'L_thumb_proximal_pitch_joint': 1.0, 'R_index_intermediate_joint': 1.2, 'R_middle_intermediate_joint': 1.2, 'R_pinky_intermediate_joint': 1.2, 'R_ring_intermediate_joint': 1.2, 'R_thumb_proximal_pitch_joint': 1.0, 'L_thumb_intermediate_joint': 1.0, 'R_thumb_intermediate_joint': 1.0, 'L_thumb_distal_joint': 0.8, 'R_thumb_distal_joint': 0.8}
+G1_HAND_CLOSED_POSE = {'L_index_proximal_joint': 1.0, 'L_middle_proximal_joint': 1.0, 'L_pinky_proximal_joint': 1.0, 'L_ring_proximal_joint': 1.0, 'L_thumb_proximal_yaw_joint': 0.3, 'R_index_proximal_joint': 1.0, 'R_middle_proximal_joint': 1.0, 'R_pinky_proximal_joint': 1.0, 'R_ring_proximal_joint': 1.0, 'R_thumb_proximal_yaw_joint': 0.3, 'L_index_intermediate_joint': 1.0, 'L_middle_intermediate_joint': 1.0, 'L_pinky_intermediate_joint': 1.0, 'L_ring_intermediate_joint': 1.0, 'L_thumb_proximal_pitch_joint': 0.8, 'R_index_intermediate_joint': 1.0, 'R_middle_intermediate_joint': 1.0, 'R_pinky_intermediate_joint': 1.0, 'R_ring_intermediate_joint': 1.0, 'R_thumb_proximal_pitch_joint': 0.8, 'L_thumb_intermediate_joint': 1.0, 'R_thumb_intermediate_joint': 1.0, 'L_thumb_distal_joint': 0.8, 'R_thumb_distal_joint': 0.8}
 G1_LEFT_HAND_RETARGET_JOINTS = ['L_index_proximal_joint', 'L_middle_proximal_joint', 'L_pinky_proximal_joint', 'L_ring_proximal_joint', 'L_thumb_proximal_yaw_joint', 'L_index_intermediate_joint', 'L_middle_intermediate_joint', 'L_pinky_intermediate_joint', 'L_ring_intermediate_joint', 'L_thumb_proximal_pitch_joint', 'L_thumb_intermediate_joint', 'L_thumb_distal_joint']
 G1_RIGHT_HAND_RETARGET_JOINTS = ['R_index_proximal_joint', 'R_middle_proximal_joint', 'R_pinky_proximal_joint', 'R_ring_proximal_joint', 'R_thumb_proximal_yaw_joint', 'R_index_intermediate_joint', 'R_middle_intermediate_joint', 'R_pinky_intermediate_joint', 'R_ring_intermediate_joint', 'R_thumb_proximal_pitch_joint', 'R_thumb_intermediate_joint', 'R_thumb_distal_joint']
 G1_PINK_HAND_JOINT_ORDER = ['L_index_proximal_joint', 'L_middle_proximal_joint', 'L_pinky_proximal_joint', 'L_ring_proximal_joint', 'L_thumb_proximal_yaw_joint', 'R_index_proximal_joint', 'R_middle_proximal_joint', 'R_pinky_proximal_joint', 'R_ring_proximal_joint', 'R_thumb_proximal_yaw_joint', 'L_index_intermediate_joint', 'L_middle_intermediate_joint', 'L_pinky_intermediate_joint', 'L_ring_intermediate_joint', 'L_thumb_proximal_pitch_joint', 'R_index_intermediate_joint', 'R_middle_intermediate_joint', 'R_pinky_intermediate_joint', 'R_ring_intermediate_joint', 'R_thumb_proximal_pitch_joint', 'L_thumb_intermediate_joint', 'R_thumb_intermediate_joint', 'L_thumb_distal_joint', 'R_thumb_distal_joint']
@@ -146,7 +146,7 @@ def _build_g1_inspire_motion_controller_pickplace_pipeline():
     return pipeline, [left_se3, right_se3]
 
 
-class AutoPickPlaceUnitreeG1BottledWaterC01MotionControllerTeleopEnvCfg(PickPlaceG1InspireFTPEnvCfg):
+class AutoPickPlaceUnitreeG1MugMotionControllerTeleopEnvCfg(PickPlaceG1InspireFTPEnvCfg):
     """Auto task for Unitree G1 Inspire FTP + motion controller."""
 
     def __post_init__(self):
@@ -154,7 +154,7 @@ class AutoPickPlaceUnitreeG1BottledWaterC01MotionControllerTeleopEnvCfg(PickPlac
 
         # Deterministic object/table/target overrides from PickPlaceVRSpec.
         self.scene.object.spawn = SingleRigidBodyUsdFileCfg(
-            usd_path=f"{ISAAC_NUCLEUS_DIR}/SimReady/Residential/Kitchen/Food/Beverages/Bottled_Water_C01/sm_food_beverage_bottledWater_c01_01.usd",
+            usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Objects/Mug/mug.usd",
             scale=(1.0, 1.0, 1.0),
             rigid_props=PhysxRigidBodyPropertiesCfg(),
             mass_props=MassPropertiesCfg(mass=0.05),
@@ -166,12 +166,12 @@ class AutoPickPlaceUnitreeG1BottledWaterC01MotionControllerTeleopEnvCfg(PickPlac
         self.target_pose = {'pos': [0.25, 0.45, 0.9996], 'quat_xyzw': [0.0, 0.0, 0.0, 1.0]}
 
         # Additional scene objects are props/distractors; success still uses self.scene.object.
-        self.scene.steering_wheel = RigidObjectCfg(
-            prim_path="{ENV_REGEX_NS}/SceneObjects/SteeringWheel",
-            init_state=RigidObjectCfg.InitialStateCfg(pos=(-0.15, 0.55, 0.9996), rot=(0.0, 0.0, 0.0, 1.0)),
+        self.scene.bottled_water_c01 = RigidObjectCfg(
+            prim_path="{ENV_REGEX_NS}/SceneObjects/BottledWaterC01",
+            init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 0.43, 0.9996), rot=(0.0, 0.0, 0.0, 1.0)),
             spawn=SingleRigidBodyUsdFileCfg(
-                usd_path=f"{ISAACLAB_NUCLEUS_DIR}/Mimic/pick_place_task/pick_place_assets/steering_wheel.usd",
-                scale=(0.75, 0.75, 0.75),
+                usd_path=f"{ISAAC_NUCLEUS_DIR}/SimReady/Residential/Kitchen/Food/Beverages/Bottled_Water_C01/sm_food_beverage_bottledWater_c01_01.usd",
+                scale=(1.0, 1.0, 1.0),
                 rigid_props=PhysxRigidBodyPropertiesCfg(),
                 mass_props=MassPropertiesCfg(mass=0.05),
             ),

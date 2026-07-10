@@ -48,14 +48,8 @@ properties:
     properties:
       preset:
         type: string
-        enum:
-          - seres_r11_a2_high_pd
-          - fourier_gr1t2_high_pd
-          - unitree_g1_inspire_ftp
-          - unitree_g1
-          - unitree_h1
-          - mujoco_humanoid
-          - mujoco_humanoid_28
+        enum: []
+        description: "Runtime enum is injected from presets/robot_presets.yml by schema_validation.py."
       robot_cfg_import:
         type: string
         minLength: 1
@@ -118,6 +112,24 @@ properties:
             $ref: "#/$defs/pose7"
           right:
             $ref: "#/$defs/pose7"
+      motion_controller_adaptation:
+        type: object
+        additionalProperties: false
+        properties:
+          reference_env_cfg:
+            type: string
+            minLength: 1
+          left_controller_offset_rpy_deg:
+            $ref: "#/$defs/vec3"
+          right_controller_offset_rpy_deg:
+            $ref: "#/$defs/vec3"
+          use_wrist_rotation:
+            type: boolean
+          use_wrist_position:
+            type: boolean
+          grasp_scalar:
+            type: string
+            minLength: 1
   scene:
     type: object
     additionalProperties: false
@@ -184,18 +196,16 @@ properties:
     properties:
       preset:
         type: string
-        enum:
-          - steering_wheel
-          - bottled_water_c01
-          - factory_m16_nut_green
-          - exhaust_pipe
-        description: "当前仓库 pick_place/相关 mimic 任务里已有或已引用的可抓取物体预设。"
+        enum: []
+        description: "Runtime enum is injected from presets/object_presets.yml by schema_validation.py."
       usd_path:
         type: string
         minLength: 1
         description: "可由 object.preset 推导；需要覆盖时显式填写。"
       pose:
         $ref: "#/$defs/pose7"
+      placement:
+        $ref: "#/$defs/object_placement"
       scale:
         $ref: "#/$defs/vec3"
       mass:
@@ -203,6 +213,47 @@ properties:
         minimum: 0.0
       single_rigid_body:
         type: boolean
+  scene_objects:
+    type: array
+    description: "附加场景物体，只用于摆放 props/distractors/obstacles，不参与主 pick-place success/termination。"
+    items:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - preset
+        - role
+        - pose
+      properties:
+        name:
+          type: string
+          pattern: ^[a-z][a-z0-9_]*$
+          description: "生成到 self.scene.<name> 的安全 Python 属性名。"
+        preset:
+          type: string
+          enum: []
+          description: "Runtime enum is injected from presets/object_presets.yml by schema_validation.py."
+        role:
+          type: string
+          enum:
+            - prop
+            - distractor
+            - obstacle
+          description: "阶段 A/B 中附加物体不参与 success/termination。"
+        usd_path:
+          type: string
+          minLength: 1
+        pose:
+          $ref: "#/$defs/pose7"
+        placement:
+          $ref: "#/$defs/object_placement"
+        scale:
+          $ref: "#/$defs/vec3"
+        mass:
+          type: number
+          minimum: 0.0
+        single_rigid_body:
+          type: boolean
   target:
     type: object
     additionalProperties: false
@@ -381,3 +432,11 @@ $defs:
         $ref: "#/$defs/vec3"
       quat_xyzw:
         $ref: "#/$defs/quat_xyzw"
+  object_placement:
+    type: object
+    additionalProperties: false
+    properties:
+      semantic:
+        type: string
+        minLength: 1
+        description: "例如 near_left_hand / near_right_hand / table_center / table_back，由 placement_presets.yml 解析。"

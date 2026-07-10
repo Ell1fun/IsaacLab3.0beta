@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent 生成 env_cfg：开发日志</title>
+  <link rel="stylesheet" href="../isaaclab_flow/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI Agent 生成 env_cfg：开发日志</h1>
+    <p>记录 env_cfg skill 从可运行 demo 走向工程化落地的评审问题、修复顺序和代码变更。</p>
+  </header>
+
+  <main>
+    <nav>
+      <strong>目录</strong>
+      <a href="./index.html">总览</a>
+      <a href="./architecture.html">架构分层</a>
+      <a href="./architecture_evolution.html">开发演进</a>
+      <a href="./schema_spec.html">Schema / Spec</a>
+      <a href="./workflow.html">Workflow</a>
+      <a href="./orchestrator.html">Orchestrator</a>
+      <a href="./orchestrator_code.html">代码导读</a>
+      <a href="./module_flow.html">模块与流程图</a>
+      <a href="./adaptation_test_gate.html">Adaptation / Test Gate</a>
+      <a href="./preset_enrichment.html">Preset Enrichment</a>
+      <a href="./template_generator.html">Template Generator</a>
+      <a href="./placement_workflow.html">Placement Workflow</a>
+      <a href="./skill_files.html">Skill 文件</a>
+      <a href="./presets_prompts.html">Presets &amp; Prompts</a>
+      <a class="active" href="./dev_log.html">开发日志</a>
+      <a href="./roadmap.html">落地路线</a>
+    </nav>
+
+    <div>
+      <section>
+        <h2>2026-07-08：工程化评审</h2>
+        <p>
+          今天对 <code>my_docs/env_cfg_skills</code> 做了一次工程化评审。结论是：
+          当前流程已经不是简单 prompt demo，而是具备 <code>schema + presets + prompts + workflow + gate + dry-run</code>
+          的本地 skill 雏形；但距离长期可维护、可落地的生产级 skill 还需要补齐配置一致性、路径契约、示例同步和运行级验证。
+        </p>
+      </section>
+
+      <section>
+        <h2>发现的 5 个问题</h2>
+        <table>
+          <thead><tr><th>编号</th><th>问题</th><th>为什么重要</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>1</b></td>
+              <td><code>robot_presets.yml</code> 中的 <code>output_dir</code> / <code>registration_module</code> 没被 generator 消费。</td>
+              <td>preset 看起来配置了输出位置，但生成器仍写死 pick_place 目录，扩展时容易误判配置已经生效。</td>
+              <td>已修复</td>
+            </tr>
+            <tr>
+              <td><b>2</b></td>
+              <td><code>object_presets.yml</code> 中的 <code>pose</code> / <code>default_target_pose</code> 语义不闭合。</td>
+              <td>维护者可能以为 object preset pose 会影响生成结果，但当前默认位置主要由 robot placement 计算。</td>
+              <td>待处理</td>
+            </tr>
+            <tr>
+              <td><b>3</b></td>
+              <td><code>examples/</code> 与当前 <code>presets/</code> 存在事实漂移。</td>
+              <td>示例里的 joint/link 命名如果过期，会误导模型、测试和后续维护者。</td>
+              <td>待处理</td>
+            </tr>
+            <tr>
+              <td><b>4</b></td>
+              <td><code>post_generation_tests.py</code> 主要是静态检查，不能证明 env_cfg 可 import 或可创建环境。</td>
+              <td>AST 通过不代表 IsaacLab 运行通过；还需要 import/registry/env smoke test。</td>
+              <td>待处理</td>
+            </tr>
+            <tr>
+              <td><b>5</b></td>
+              <td>schema enum 和 presets key 如果都手写维护，会形成两套事实源。</td>
+              <td>新增机器人/物体时应该只改 presets；schema 的允许值应由 presets 派生。</td>
+              <td>已修复</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>本次优先修复</h2>
+        <h3>问题 5：schema enum 由 presets 派生</h3>
+        <p>
+          在 <code>schema_validation.py</code> 中新增运行时 schema resolver。
+          每次校验 <code>pick_place_vr</code> spec 前，先复制一份 schema，并把 preset enum 注入为当前 presets keys：
+        </p>
+        <ul>
+          <li><code>robot.preset.enum</code> 来自 <code>presets/robot_presets.yml</code> resolved keys。</li>
+          <li><code>object.preset.enum</code> 来自 <code>presets/object_presets.yml</code> keys。</li>
+          <li>磁盘上的 schema 只保留结构约束，<code>enum: []</code> 是运行时占位，不再手写具体 preset 列表。</li>
+          <li>以后新增或重命名 preset key，只需要改 presets；schema gate 会自动使用新的允许值。</li>
+          <li>即使本地环境没有 <code>jsonschema</code>，fallback validator 也会检查 preset key 是否存在于 presets 文件。</li>
+        </ul>
+
+        <h3>问题 1：generator 消费 preset 输出路径</h3>
+        <p>
+          在 <code>generator_workflow.py</code> 中新增 <code>output_paths_for_spec()</code>。
+          template generator 和 adaptation generator 都改为从目标 robot preset 读取：
+        </p>
+        <ul>
+          <li><code>output_dir</code>：决定 auto env_cfg 文件写到哪个目录。</li>
+          <li><code>registration_module</code>：决定 task 注册内容 patch 到哪个 <code>__init__.py</code>。</li>
+          <li>如果 preset 没配置，则 fallback 到当前 pick_place 默认路径。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>后续顺序</h2>
+        <ol>
+          <li>继续处理问题 3：让 examples 与 presets 同步，避免示例事实漂移。</li>
+          <li>处理问题 2：明确 object preset pose 的语义，删除无效字段或真正消费它们。</li>
+          <li>处理问题 4：把 post-generation gate 从静态检查升级到 import/registry smoke test。</li>
+          <li>再补 skill manifest 或更标准的注册入口，让当前本地 skill 更接近平台级 skill。</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>2026-07-08：examples 对齐 presets</h2>
+        <p>
+          将 <code>examples/g1_pick_place_hand_tracking</code> 与
+          <code>examples/r11_pick_place_hand_tracking</code> 改成当前 presets enrichment 后的 spec 快照。
+          这样 examples 不再携带旧 hand joint、TODO object USD 或旧命名规则。
+        </p>
+        <ul>
+          <li><code>examples/</code> 当前不会被 orchestrator、pipeline、spec builder 或 generator 在运行时读取。</li>
+          <li>用户调用 skill 时，<code>examples/</code> 不会影响路由、schema gate、preset enrichment 或 env_cfg 生成。</li>
+          <li>当前 workflow 也不会自动增删改 <code>examples/</code> 文件；只有人工维护或未来显式测试脚本才会使用它们。</li>
+          <li>如果未来把 examples 接入回归测试，应只读这些文件，并用它们验证输出摘要，不应在普通生成流程中修改它们。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>2026-07-08：阶段 A/B 多物体摆放</h2>
+        <p>
+          在当前单主 pick_place skill 上增加“附加场景物体 + 语义摆放”的最小安全能力。
+          本轮不修改 success、termination、reward 或 observation；主 <code>object</code> 仍然是唯一参与 pick-place 判定的物体。
+        </p>
+        <ul>
+          <li>新增 <code>presets/placement_presets.yml</code>，维护 <code>near_left_hand</code>、<code>near_right_hand</code>、<code>table_center</code>、<code>table_back</code>、<code>table_front</code> 等语义摆放点。</li>
+          <li>扩展 schema：主 <code>object</code> 支持 <code>placement.semantic</code>，新增可选 <code>scene_objects[]</code>。</li>
+          <li>扩展 <code>presets.py</code>：从 placement preset 计算主物体和附加物体的 pose，并继续从 object preset 补 USD/scale/single_rigid_body。</li>
+          <li>扩展 <code>generator_workflow.py</code>：把 <code>scene_objects</code> 渲染成额外 <code>RigidObjectCfg</code>，不替换 <code>self.scene.object</code>。</li>
+          <li>扩展 <code>schema_validation.py</code> 和 <code>post_generation_tests.py</code>：检查 scene object preset/name/semantic，并确认生成内容包含对应物体。</li>
+          <li>扩展 <code>pick_place_vr_spec_builder.md</code> 和本地 parser：用户说“方向盘放右手附近，桌上摆水瓶”时，主方向盘使用 <code>near_right_hand</code>，水瓶进入 <code>scene_objects</code>。</li>
+        </ul>
+        <div class="note">
+          明确边界：如果用户说“水管和方向盘都要抓取”，当前阶段不能自动生成多主物体成功条件；应追问主操作物体，或后续进入阶段 C 设计多主任务。
+        </div>
+      </section>
+
+      <section>
+        <h2>2026-07-08：Object Intent Clarification Gate</h2>
+        <p>
+          增加 spec 生成前的物体意图澄清 gate，避免模型在主物体不清晰或物体不在 presets 中时擅自生成 env_cfg。
+        </p>
+        <ul>
+          <li>给 <code>object_presets.yml</code> 增加 <code>aliases</code>、<code>description</code>、<code>status</code>、<code>blocked_reason</code>。</li>
+          <li>新增 <code>object_intent.py</code>，从用户 prompt 中识别已知物体、未知物体、主操作物体候选和 blocked preset。</li>
+          <li>在 <code>spec_builder.py</code> 的 Stage A 最前面调用 object intent gate；如果需要澄清，直接返回 questions，不进入 enrichment、schema 或 generator。</li>
+          <li>未知物体会推荐当前 ready 的 object presets，并询问用户是改用已有物体、提供 USD 新增 preset，还是本次不添加。</li>
+          <li>多个可能主操作物体会追问用户选择唯一主 <code>object</code>，其余物体只能作为 <code>scene_objects</code>。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>2026-07-08：多轮 Clarification Resolver</h2>
+        <p>
+          将上一版“直接扫描完整历史文本”的 object intent gate 改成“多轮 draft intent + resolver + safety gate”。
+          这样用户回答“不要水管了”时，会从当前 intent 中删除水管，而不是因为历史 prompt 里仍包含“水管”而反复阻断。
+        </p>
+        <ul>
+          <li>新增 <code>clarification_resolver.py</code>，负责构造和更新 <code>draft_intent</code>。</li>
+          <li><code>orchestrator.py</code> 的 chat loop 现在保存上一轮 <code>draft_intent</code>，每轮只把用户最新回答传给 pipeline。</li>
+          <li><code>pipeline.py</code> 和 <code>spec_builder.py</code> 透传并输出更新后的 <code>draft_intent</code>。</li>
+          <li>resolver 负责理解删除/保留/主物体选择等多轮意图；deterministic safety gate 继续检查未知物体、blocked preset 和多主物体歧义。</li>
+          <li>验证场景：第一轮“水瓶主物体 + 方向盘附加 + 排气管 + 水管”会阻断；第二轮“不要水管”后只剩排气管阻断；第三轮“排气管也不要”后生成水瓶主物体和方向盘附加物体。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>2026-07-08：LLM Resolver 与对话式输出</h2>
+        <p>
+          将 chat 体验从“输出完整 workflow debug payload”改为“像聊天一样追问用户”。
+          同时新增 LLM clarification resolver prompt，让 API 负责理解多轮自然语言，代码继续负责安全校验和 spec 生成。
+        </p>
+        <ul>
+          <li>新增 <code>prompts/pick_place_vr_clarification_resolver.md</code>，模型只输出结构化 intent patch，不输出 spec 或 env_cfg。</li>
+          <li><code>spec_builder.py</code> 在开启 API 时优先调用 LLM resolver；模型失败时回退规则 resolver。</li>
+          <li><code>clarification_resolver.py</code> 新增 <code>build_intent_from_llm_payload()</code>，把模型输出 hydrate 成内部 <code>draft_intent</code>。</li>
+          <li><code>pipeline.py</code> 的 concise failure 输出不再暴露完整 <code>draft_intent</code>，只保留 errors、questions 和当前理解摘要。</li>
+          <li><code>orchestrator.py</code> 的 chat 模式改成对话式失败输出：显示“需要确认的信息”和“当前理解”，不再 dump 完整 YAML。</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>2026-07-08：Object Presets 扩展</h2>
+        <p>
+          从 IsaacLab 仓库已有任务配置中提取第一批路径明确、已被任务引用过的 Nucleus USD 资产，
+          扩充 <code>object_presets.yml</code>，让用户在对话中可以选择更多可生成的桌面物体。
+        </p>
+        <ul>
+          <li>将 <code>exhaust_pipe</code> 从 <code>blocked</code> 改为 <code>ready</code>，并使用 <code>blue_exhaust_pipe.usd</code> 的真实路径。</li>
+          <li>新增 Blocks 系列：<code>blue_block</code>、<code>red_block</code>、<code>green_block</code>、<code>yellow_block</code>。</li>
+          <li>新增常用可抓取物体：<code>dex_cube</code>、<code>mug</code>、<code>toy_truck</code>、<code>box</code>。</li>
+          <li>新增 nut pour / sorting 场景资产：<code>sorting_bin_blue</code>、<code>sorting_bowl_yellow</code>、<code>sorting_beaker_red</code>、<code>sorting_scale</code>。</li>
+          <li>新增 factory gear 系列：<code>factory_gear_small</code>、<code>factory_gear_medium</code>、<code>factory_gear_large</code>。</li>
+          <li>每个新增 preset 都补充了 <code>aliases</code>、<code>description</code>、<code>status</code>、<code>reference_env_cfg</code>、<code>usd_path</code>、<code>scale</code>、<code>single_rigid_body</code> 和 <code>role_hints</code>。</li>
+        </ul>
+        <div class="note">
+          本轮扩展只收录“仓库中已有任务引用且路径明确”的第一批资产；还没有接入完整 Omniverse asset catalog。
+          后续如果要覆盖更多 Nucleus 资产，需要增加 candidate/verified 状态、资产验证流程和必要的碰撞/尺度 smoke test。
+        </div>
+      </section>
+
+      <section>
+        <h2>2026-07-08：Post Validation 增强（桌面摆放 + 可达性）</h2>
+        <p>
+          在 generator 写文件前增加两步轻量验证，避免“看起来生成成功，但一启动就明显不可用”的场景摆放问题。
+          这两步都不需要拉起仿真环境；它们只依赖最终冻结的 spec（桌子 pose、各物体 pose、placement 语义等）。
+        </p>
+        <ul>
+          <li>桌面范围检查：验证主物体与附加物体的 <code>pose.pos</code> 是否落在桌面 XY 合理范围内。</li>
+          <li>最小间距检查：对所有生成的物体做成对距离检查，避免多个物体生成在几乎同一位置。</li>
+          <li>可达性启发式检查：当 robot preset 提供 <code>idle_wrist_pose</code> 时，根据 <code>near_left_hand</code>/<code>near_right_hand</code> 语义选择对应手腕参考点，检查物体与手腕的距离不超过阈值。</li>
+          <li>严格 IK 检查：当 robot preset 提供 <code>urdf_path</code>、<code>controlled_joint_names</code>、<code>eef_link_names</code> 且启用 <code>reachability.strict_ik.enabled</code> 时，使用 Pinocchio 做不启动仿真的 position IK 收敛检查。</li>
+          <li>严格 IK 的 <code>required</code> 默认为 <code>false</code>：缺少 Pinocchio/URDF 时不误杀 demo；如果产品阶段要求强保证，可改成 <code>true</code>，缺依赖或 IK 不收敛都会阻断交付。</li>
+          <li>若检查失败：post-generation gate 阻断交付，不写文件，优先调整 placement preset / robot preset 或用户语义摆放选择。</li>
+        </ul>
+      </section>
+
+    </div>
+  </main>
+</body>
+</html>

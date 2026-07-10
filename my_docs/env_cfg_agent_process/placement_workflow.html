@@ -9,7 +9,7 @@
 <body>
   <header>
     <h1>AI Agent 生成 env_cfg：Placement Workflow</h1>
-    <p>说明 object.init_state 和 target_pose 如何由 robot workspace 与 object preset 确定性计算，而不是让模型猜绝对坐标。</p>
+    <p>说明主 object、target 和附加 scene objects 如何由 robot workspace、object preset 与 placement preset 确定性计算，而不是让模型猜绝对坐标。</p>
   </header>
 
   <main>
@@ -28,6 +28,7 @@
       <a href="./template_generator.html">Template Generator</a>
       <a class="active" href="./placement_workflow.html">Placement Workflow</a>
       <a href="./skill_files.html">Skill 文件</a>
+      <a href="./dev_log.html">开发日志</a>
       <a href="./roadmap.html">落地路线</a>
     </nav>
 
@@ -40,7 +41,7 @@
           因此同一个水瓶换到 Unitree G1 时，就可能离机器人过远。
         </p>
         <div class="note">
-          新规则：物体 preset 描述物体自身事实；机器人 preset 描述工作空间；workflow 负责计算最终 <code>object.pose</code> 和 <code>target.pose</code>。
+          新规则：物体 preset 描述物体自身事实；机器人 preset 描述工作空间；placement preset 描述语义摆放点；workflow 负责计算最终 <code>object.pose</code>、<code>target.pose</code> 和 <code>scene_objects[].pose</code>。
         </div>
       </section>
 
@@ -50,11 +51,35 @@
           <thead><tr><th>层级</th><th>负责什么</th></tr></thead>
           <tbody>
             <tr><td>Object preset</td><td>USD 路径、scale、质量、是否需要单刚体 spawner、默认朝向等物体自身事实。</td></tr>
-            <tr><td>Robot preset</td><td>桌子位置、机器人工作空间、推荐 object/target 相对桌面中心的偏移。</td></tr>
-            <tr><td>Placement workflow</td><td>如果用户没有明确给坐标，就根据 <code>table_center + offset</code> 计算 pose。</td></tr>
+            <tr><td>Robot preset</td><td>桌子位置、机器人工作空间、推荐主 object/target 相对桌面中心的默认偏移。</td></tr>
+            <tr><td>Placement preset</td><td>维护 <code>near_left_hand</code>、<code>near_right_hand</code>、<code>table_back</code> 等语义位置相对桌面中心的偏移。</td></tr>
+            <tr><td>Placement workflow</td><td>如果用户没有明确给坐标，就根据 <code>table_center + offset</code> 计算主 object、target 和 scene objects 的 pose。</td></tr>
             <tr><td>Agent / LLM</td><td>只负责理解“靠近右手、放中间、放远一点”等意图，不直接猜最终绝对坐标。</td></tr>
           </tbody>
         </table>
+      </section>
+
+      <section>
+        <h2>阶段 A/B：多物体边界</h2>
+        <p>
+          当前扩展只支持 <b>单主操作物体 + 多个附加场景物体</b>。
+          主 <code>object</code> 仍然是唯一参与 pick-place success、termination 和 target 的物体；
+          <code>scene_objects</code> 只负责摆放 props/distractors/obstacles。
+        </p>
+        <pre><code>object:
+  preset: steering_wheel
+  placement:
+    semantic: near_right_hand
+
+scene_objects:
+  - name: bottled_water
+    preset: bottled_water_c01
+    role: distractor
+    placement:
+      semantic: table_back</code></pre>
+        <div class="note">
+          如果用户要求“水管和方向盘都要抓取并判定成功”，这属于阶段 C 多主物体任务，需要新的 success/termination/reward 设计；阶段 A/B 不会静默改现有 pick_place 成功条件。
+        </div>
       </section>
 
       <section>
@@ -72,20 +97,38 @@ default_placement:
   object_xy_from_table_center: [0.0, -0.10]
   target_xy_from_table_center: [0.25, -0.10]
   z: 0.9996</code></pre>
+        <p>
+          新增的 <code>placement_presets.yml</code> 负责语义摆放点，例如：
+        </p>
+        <pre><code>default:
+  named_placements:
+    near_left_hand:
+      xy_from_table_center: [0.0, 0.12]
+      z_mode: tabletop
+    near_right_hand:
+      xy_from_table_center: [0.0, -0.12]
+      z_mode: tabletop
+    table_back:
+      xy_from_table_center: [-0.30, 0.0]
+      z_mode: tabletop</code></pre>
       </section>
 
       <section>
         <h2>代码流程</h2>
         <pre><code>_enrich_pick_place_vr_spec(spec)
   ↓
-读取 robot preset 和 object preset
+读取 robot preset、object preset 和 placement preset
   ↓
-补齐 robot/table/object 的确定事实
+补齐 robot/table/object/scene_objects 的确定事实
   ↓
-_compute_default_pick_place_placement(...)
+compute_default_pick_place_placement(...)
   - 如果用户已经明确给 object.pose：尊重用户
   - 如果用户没有给 object.pose：用 table_center + object offset 计算
   - 如果用户没有给 target.pose：用 table_center + target offset 计算
+  ↓
+semantic_pose_from_placement(...)
+  - object.placement.semantic → object.pose
+  - scene_objects[].placement.semantic → scene_objects[].pose
   ↓
 schema gate
   ↓
@@ -96,8 +139,9 @@ template generator 写入 env_cfg</code></pre>
         <h2>优先级</h2>
         <ol>
           <li>用户明确指定坐标：workflow 不覆盖。</li>
-          <li>用户没有指定坐标：使用 <code>robot.default_placement</code> 自动计算。</li>
-          <li>没有 placement 规则：才退回到后续 fallback 或阻断，不让模型硬猜。</li>
+          <li>用户没有指定坐标但给了 <code>placement.semantic</code>：使用 <code>placement_presets.yml</code> 计算。</li>
+          <li>用户没有指定坐标和 semantic：主 object/target 使用 <code>robot.default_placement</code> 自动计算。</li>
+          <li>没有 placement 规则：阻断或追问，不让模型硬猜。</li>
         </ol>
       </section>
     </div>

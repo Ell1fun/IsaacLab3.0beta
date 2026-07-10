@@ -1,10 +1,10 @@
 spec_version: "0.1"
 task:
   family: manager_based/manipulation/pick_place
-  variant: g1_inspire_hand_tracking_demo
-  generated_file_stem: auto_pickplace_unitree_g1_steering_wheel_teleop_env_cfg
-  gym_id: Isaac-Auto-PickPlace-UnitreeG1-SteeringWheel-Teleop-v0
-  notes: Unitree G1 Inspire Hand pick_place 示例 spec，用于验证 schema 表达能力。
+  variant: unitree_g1_steering_wheel_hand_tracking_teleop
+  generated_file_stem: auto_pickplace_unitree_g1_steering_wheel_hand_tracking_teleop_env_cfg
+  gym_id: Isaac-Auto-PickPlace-UnitreeG1-SteeringWheel-HandTracking-Teleop-v0
+  notes: G1 hand tracking example generated from current presets.
 robot:
   preset: unitree_g1_inspire_ftp
   robot_cfg_import: isaaclab_assets.robots.unitree:G1_INSPIRE_FTP_CFG
@@ -12,28 +12,31 @@ robot:
   eef_link_names:
     left: left_wrist_yaw_link
     right: right_wrist_yaw_link
-  controlled_joint_names:
-    - left_shoulder_pitch_joint
-    - left_shoulder_roll_joint
-    - left_shoulder_yaw_joint
-    - left_elbow_pitch_joint
-    - left_elbow_roll_joint
-    - right_shoulder_pitch_joint
-    - right_shoulder_roll_joint
-    - right_shoulder_yaw_joint
-    - right_elbow_pitch_joint
-    - right_elbow_roll_joint
   hand_joint_names:
-    - left_index_0_joint
-    - left_middle_0_joint
-    - left_ring_0_joint
-    - left_pinky_0_joint
-    - left_thumb_0_joint
-    - right_index_0_joint
-    - right_middle_0_joint
-    - right_ring_0_joint
-    - right_pinky_0_joint
-    - right_thumb_0_joint
+    - L_index_proximal_joint
+    - L_middle_proximal_joint
+    - L_pinky_proximal_joint
+    - L_ring_proximal_joint
+    - L_thumb_proximal_yaw_joint
+    - R_index_proximal_joint
+    - R_middle_proximal_joint
+    - R_pinky_proximal_joint
+    - R_ring_proximal_joint
+    - R_thumb_proximal_yaw_joint
+    - L_index_intermediate_joint
+    - L_middle_intermediate_joint
+    - L_pinky_intermediate_joint
+    - L_ring_intermediate_joint
+    - L_thumb_proximal_pitch_joint
+    - R_index_intermediate_joint
+    - R_middle_intermediate_joint
+    - R_pinky_intermediate_joint
+    - R_ring_intermediate_joint
+    - R_thumb_proximal_pitch_joint
+    - L_thumb_intermediate_joint
+    - R_thumb_intermediate_joint
+    - L_thumb_distal_joint
+    - R_thumb_distal_joint
   fixed_base: false
   idle_wrist_pose:
     left:
@@ -42,38 +45,41 @@ robot:
     right:
       pos: [0.25, -0.22, 0.95]
       quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  motion_controller_adaptation:
+    reference_env_cfg: source/isaaclab_tasks/isaaclab_tasks/manager_based/locomanipulation/pick_place/fixed_base_upper_body_ik_g1_env_cfg.py
+    left_controller_offset_rpy_deg: [45.0, 180.0, -90.0]
+    right_controller_offset_rpy_deg: [-135.0, 0.0, 90.0]
+    use_wrist_rotation: false
+    use_wrist_position: false
+    grasp_scalar: max_trigger_squeeze
 scene:
   ground:
     kind: ground_plane
   table:
-    usd_path: "${ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd"
+    usd_path: ${ISAAC_NUCLEUS_DIR}/Props/PackingTable/packing_table.usd
     pose:
-      pos: [0.6, 0.0, 0.0]
+      pos: [0.0, 0.55, 0.0]
       quat_xyzw: [0.0, 0.0, 0.0, 1.0]
 object:
   preset: steering_wheel
-  usd_path: "TODO: object usd path"
+  usd_path: ${ISAACLAB_NUCLEUS_DIR}/Mimic/pick_place_task/pick_place_assets/steering_wheel.usd
   pose:
-    pos: [0.6, 0.0, 0.8]
+    pos: [0.0, 0.45, 0.9996]
     quat_xyzw: [0.0, 0.0, 0.0, 1.0]
+  scale: [0.75, 0.75, 0.75]
   single_rigid_body: true
 target:
   pose:
-    pos: [0.6, -0.25, 0.8]
+    pos: [0.25, 0.45, 0.9996]
     quat_xyzw: [0.0, 0.0, 0.0, 1.0]
 control:
   mode: pink_ik
-  gravity_compensation: true
   teleop:
     enabled: true
     input_source: openxr_hand_tracking
     world_T_anchor:
       pos: [0.0, 0.0, 0.0]
       quat_xyzw: [0.0, 0.0, 0.0, 1.0]
-    rebase: false
-    hand:
-      mode: dexpilot
-      dexpilot_config_path: source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/config/unitree_hand_left_dexpilot.yml
 mdp:
   terminations:
     timeout_s: 30.0

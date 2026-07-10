@@ -16,19 +16,21 @@ def run_generate_pipeline(
     cfg: OrchestratorConfig,
     api_key: str | None,
     enable_api: bool,
+    draft_intent: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], int]:
     """Run the two-workflow generate pipeline and return output plus exit code."""
     schema_obj = load_yaml_or_json(skill.schema_path)
     if not isinstance(schema_obj, dict):
         raise ValueError("Schema must be a JSON/YAML object")
 
-    spec_obj, spec_errors, questions, iterations, enrichment_notes = run_spec_builder_workflow(
+    spec_obj, spec_errors, questions, iterations, enrichment_notes, updated_intent = run_spec_builder_workflow(
         skill=skill,
         user_text=user_text,
         schema=schema_obj,
         cfg=cfg,
         api_key=api_key,
         enable_api=enable_api,
+        draft_intent=draft_intent,
     )
 
     output: dict[str, Any] = {
@@ -47,6 +49,7 @@ def run_generate_pipeline(
             "errors": spec_errors,
             "questions": questions,
             "spec": spec_obj,
+            "draft_intent": updated_intent,
         },
     }
 
@@ -105,6 +108,32 @@ def concise_success_output(output: dict[str, Any]) -> dict[str, Any]:
 
 def concise_failure_output(output: dict[str, Any]) -> dict[str, Any]:
     """Return a compact failure payload for common blocked workflow cases."""
+    stage_a = output.get("stage_a_spec_builder", {})
+    if isinstance(stage_a, dict) and stage_a.get("ok") is False:
+        draft_intent = stage_a.get("draft_intent", {})
+        summary: dict[str, Any] = {}
+        if isinstance(draft_intent, dict):
+            primary = draft_intent.get("primary_object")
+            scene_objects = draft_intent.get("scene_objects", [])
+            unknown_objects = draft_intent.get("unknown_objects", [])
+            if isinstance(primary, dict):
+                summary["primary_object"] = primary.get("preset") or primary.get("label")
+            if isinstance(scene_objects, list):
+                summary["scene_objects"] = [
+                    item.get("preset") or item.get("label") for item in scene_objects if isinstance(item, dict)
+                ]
+            if isinstance(unknown_objects, list):
+                summary["unknown_objects"] = [
+                    item.get("label") or item.get("key") for item in unknown_objects if isinstance(item, dict)
+                ]
+        return {
+            "blocked": True,
+            "stage": "stage_a_spec_builder",
+            "errors": stage_a.get("errors", []),
+            "questions": stage_a.get("questions", []),
+            "current_intent_summary": summary,
+        }
+
     stage_b = output.get("stage_b_generator", {})
     generated = stage_b.get("generated", {}) if isinstance(stage_b, dict) else {}
     if isinstance(generated, dict) and generated.get("generator_mode") == "adaptation_candidate":

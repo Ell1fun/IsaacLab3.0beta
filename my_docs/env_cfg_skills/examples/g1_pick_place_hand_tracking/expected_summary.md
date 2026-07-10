@@ -1,6 +1,8 @@
 # G1 Inspire Hand PickPlace 示例期望
 
-- 使用 `unitree_g1_inspire_ftp` preset。
-- 使用 G1 Inspire Hand 的 wrist yaw link 作为 EEF。
-- 使用 OpenXR hand tracking + DexPilot retargeting。
-- 生成前必须确认手部 YAML、URDF 资源、hand joint 完整顺序。
+- 示例输入是当前 `presets/robot_presets.yml` 与 `presets/object_presets.yml` enrichment 后的 spec 快照。
+- 使用 `unitree_g1_inspire_ftp` preset，EEF 为 `left_wrist_yaw_link` / `right_wrist_yaw_link`。
+- 使用 `steering_wheel` object preset，USD、scale、single rigid body 均来自 object preset。
+- 使用 `openxr_hand_tracking`，应命中 `PickPlaceG1InspireFTPEnvCfg` exact template。
+- 预期生成 `auto_pickplace_unitree_g1_steering_wheel_hand_tracking_teleop_env_cfg.py` 与 `Isaac-Auto-PickPlace-UnitreeG1-SteeringWheel-HandTracking-Teleop-v0`。
+- `examples/` 不参与运行时生成流程；它只是人工阅读和未来回归测试的样例资产。

@@ -98,3 +98,25 @@ gym.register(
     },
     disable_env_checker=True,
 )
+
+# Auto-generated task registration. Keep the Auto prefix to distinguish it from hand-written tasks.
+gym.register(
+    id="Isaac-Auto-PickPlace-UnitreeG1-Mug-MotionController-Teleop-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.auto_pickplace_unitree_g1_mug_motion_controller_teleop_env_cfg:AutoPickPlaceUnitreeG1MugMotionControllerTeleopEnvCfg",
+        "robomimic_bc_cfg_entry_point": f"{agents.__name__}:robomimic/bc_rnn_low_dim.json",
+    },
+    disable_env_checker=True,
+)
+
+# Auto-generated task registration. Keep the Auto prefix to distinguish it from hand-written tasks.
+gym.register(
+    id="Isaac-Auto-PickPlace-R11-Mug-MotionController-Teleop-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.auto_pickplace_r11_mug_motion_controller_teleop_env_cfg:AutoPickPlaceR11MugMotionControllerTeleopEnvCfg",
+        "robomimic_bc_cfg_entry_point": f"{agents.__name__}:robomimic/bc_rnn_low_dim.json",
+    },
+    disable_env_checker=True,
+)

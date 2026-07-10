@@ -28,6 +28,7 @@
       <a href="./template_generator.html">Template Generator</a>
       <a href="./placement_workflow.html">Placement Workflow</a>
       <a href="./skill_files.html">Skill 文件</a>
+      <a href="./dev_log.html">开发日志</a>
       <a href="./roadmap.html">落地路线</a>
     </nav>
 
@@ -78,22 +79,36 @@
             <tr>
               <td><code>pipeline.py</code></td>
               <td>串联 Stage A 和 Stage B，是一次生成请求的主流水线。</td>
-              <td><code>SkillDef</code>、用户文本、配置、API key、是否启用 API。</td>
-              <td>完整 workflow 输出，成功时可裁剪成短格式。</td>
+              <td><code>SkillDef</code>、用户最新文本、配置、API key、是否启用 API、可选 <code>draft_intent</code>。</td>
+              <td>完整 workflow 输出，包含更新后的 <code>draft_intent</code>，成功时可裁剪成短格式。</td>
               <td>否，自己不调；把开关传给下游。</td>
             </tr>
             <tr>
+              <td><code>clarification_resolver.py</code></td>
+              <td>维护多轮 <code>draft_intent</code>，把“不要水管了 / 换成水瓶 / 方向盘作为主物体”这类回答转成结构化 intent 更新；开启 API 时可接收模型输出的 intent patch。</td>
+              <td>用户最新回答、上一轮 <code>draft_intent</code>、<code>object_presets.yml</code> catalog、可选 LLM resolver payload。</td>
+              <td>更新后的 intent、deterministic errors/questions，或可转换成 spec 的 intent。</td>
+              <td>否。</td>
+            </tr>
+            <tr>
+              <td><code>object_intent.py</code></td>
+              <td>提供 object catalog、推荐列表和静态物体分析辅助；主要给 resolver 和追问文案复用。</td>
+              <td><code>object_presets.yml</code>。</td>
+              <td>可推荐物体列表、别名 catalog。</td>
+              <td>否。</td>
+            </tr>
+            <tr>
               <td><code>spec_builder.py</code></td>
-              <td>把自然语言变成 <code>PickPlaceVRSpec</code>；先本地 parser，不够时才 AI fallback。</td>
-              <td>用户 prompt、schema、draft spec、validation errors。</td>
-              <td>结构化 spec、schema errors、追问问题、enrichment notes。</td>
-              <td>有条件调用：本地 parser 后 schema 不通过且传了 <code>--enable_api</code>。</td>
+              <td>调用 clarification resolver，把通过 safety gate 的 intent 变成 <code>PickPlaceVRSpec</code>；再做 preset enrichment、schema gate，必要时 AI fallback。</td>
+              <td>用户最新文本、schema、draft intent、draft spec、validation errors。</td>
+              <td>结构化 spec、schema errors、追问问题、enrichment notes、更新后的 draft intent。</td>
+              <td>有条件调用：开启 <code>--enable_api</code> 时先调用 clarification resolver prompt；schema 不通过时还可调用 Spec Builder prompt。</td>
             </tr>
             <tr>
               <td><code>presets.py</code></td>
-              <td>加载 robot/object presets、解析继承、补齐仓库确定事实，并计算默认 placement。</td>
-              <td>初始 spec、<code>robot_presets.yml</code>、<code>object_presets.yml</code>。</td>
-              <td>enriched spec，例如 EEF、joints、USD、table、object pose、target pose、task id。</td>
+              <td>加载 robot/object/placement presets、解析继承、补齐仓库确定事实，并计算默认和语义 placement。</td>
+              <td>初始 spec、<code>robot_presets.yml</code>、<code>object_presets.yml</code>、<code>placement_presets.yml</code>。</td>
+              <td>enriched spec，例如 EEF、joints、USD、table、object pose、target pose、scene object poses、task id。</td>
               <td>否。</td>
             </tr>
             <tr>
@@ -119,7 +134,7 @@
             </tr>
             <tr>
               <td><code>post_generation_tests.py</code></td>
-              <td>自动测试 gate：生成内容写入前先做语法、TODO、注册、命令和 G1 trigger hand joint coverage 检查。</td>
+              <td>自动测试 gate：生成内容写入前先做语法、TODO、注册、命令、scene objects 和 G1 trigger hand joint coverage 检查。</td>
               <td>generated payload、validated spec。</td>
               <td>错误列表；空列表表示允许进入写文件阶段。</td>
               <td>否。</td>
@@ -178,17 +193,27 @@ pipeline.run_generate_pipeline(...)
   v
 Stage A: spec_builder.run_spec_builder_workflow(...)
   |
-  +-- local parser 能识别常见需求？
+  +-- clarification_resolver.build_or_update_intent(...)
   |      |
-  |      +-- 是：生成最小 spec
+  |      +-- chat 模式：用用户最新回答更新上一轮 draft_intent
+  |      +-- generate 模式：从单轮 prompt 构造初始 intent
   |      |
-  |      +-- 否：生成不完整 spec，等待 schema gate 判断
+  +-- clarification_resolver.validate_intent(...)
+  |      |
+  |      +-- 未知物体 / blocked preset / 多主物体不清晰？
+  |      |      |
+  |      |      +-- 是：保存 draft_intent，返回 questions，不进入 generator
+  |      |
+  +-- clarification_resolver.intent_to_spec(...)
+         |
+         +-- 生成最小 spec
   |
   v
 presets.enrich_pick_place_vr_spec(...)
   - robot presets 补齐 base/eef/joints/init/table/template 信息
-  - object presets 补齐 usd/scale/mass/single_rigid_body 信息
-  - placement 根据 table_center + robot.default_placement 算 object.pose / target.pose
+  - object presets 补齐主物体和 scene_objects 的 usd/scale/mass/single_rigid_body 信息
+  - placement presets 把 near_left_hand / near_right_hand / table_back 等语义转成 pose
+  - default_placement 根据 table_center 算默认 object.pose / target.pose
   - 自动生成 task.generated_file_stem / task.gym_id
   |
   v
@@ -206,6 +231,7 @@ schema_validation.validate_spec(...)
   |      |           +-- 是：检查 (robot, input_source) 是否有 exact template
   |      |           |     - 继承已有 env_cfg 模板
   |      |           |     - 生成 auto env_cfg 薄封装
+  |      |           |     - 如果有 scene_objects，生成额外 RigidObjectCfg
   |      |           |     - 生成 pick_place/__init__.py 注册内容
   |      |           |     - 生成可复制 teleop 命令
   |      |           |     - 写入前必须通过 post_generation_tests
@@ -243,6 +269,7 @@ post_generation_tests.run_post_generation_tests(...)
   - no TODO placeholders
   - registration includes generated gym_id
   - teleop command is single-line copyable
+  - scene_objects in spec are rendered into env_cfg
   |
   +-- dry_run=true：只输出 DRY_RUN:/abs/path，不写文件
   |

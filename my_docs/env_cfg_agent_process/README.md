@@ -16,5 +16,6 @@
 - `placement_workflow.html`：object.init_state 和 target_pose 如何按机器人工作空间自动计算
 - `skill_files.html`：`env_cfg_skills` 执行材料说明
 - `presets_prompts.html`：presets/ 字段清单与 prompts/ 职责边界参考
+- `dev_log.html`：开发日志，记录工程化评审问题、修复顺序和对应代码变更
 - `roadmap.html`：从当前雏形到产品化的路线
 - `schemas/`：知识库侧的 schema 备份/学习版本

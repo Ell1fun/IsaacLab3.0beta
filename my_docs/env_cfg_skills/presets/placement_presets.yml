@@ -1,0 +1,50 @@
+# Semantic placement facts for pick_place scene layout.
+#
+# Coordinates are offsets from the robot preset's default table center. They are
+# intentionally maintained outside robot_presets.yml so robot facts and layout
+# facts can evolve independently.
+
+default:
+  named_placements:
+    near_left_hand:
+      xy_from_table_center: [0.0, 0.12]
+      z_mode: tabletop
+      yaw: 0.0
+      assigned_hand: left
+      min_spacing: 0.12
+    near_right_hand:
+      xy_from_table_center: [0.0, -0.12]
+      z_mode: tabletop
+      yaw: 0.0
+      assigned_hand: right
+      min_spacing: 0.12
+    table_center:
+      xy_from_table_center: [-0.15, 0.0]
+      z_mode: tabletop
+      yaw: 0.0
+      assigned_hand: either
+      min_spacing: 0.12
+    table_back:
+      xy_from_table_center: [-0.30, 0.0]
+      z_mode: tabletop
+      yaw: 0.0
+      assigned_hand: either
+      min_spacing: 0.12
+    table_front:
+      xy_from_table_center: [0.05, 0.0]
+      z_mode: tabletop
+      yaw: 0.0
+      assigned_hand: either
+      min_spacing: 0.12
+
+unitree_g1_inspire_ftp:
+  inherits: default
+
+unitree_g1:
+  inherits: unitree_g1_inspire_ftp
+
+seres_r11_a2_high_pd:
+  inherits: default
+
+fourier_gr1t2_high_pd:
+  inherits: default

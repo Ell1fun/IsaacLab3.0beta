@@ -39,6 +39,54 @@ def python_asset_expr(path: str) -> str:
     return repr(path)
 
 
+def scene_objects_from_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return validated-looking additional scene objects from the spec."""
+    scene_objects = spec.get("scene_objects", [])
+    return [item for item in scene_objects if isinstance(item, dict)] if isinstance(scene_objects, list) else []
+
+
+def render_scene_object_cfg_lines(scene_object: dict[str, Any]) -> list[str]:
+    """Render a RigidObjectCfg assignment for an additional scene object."""
+    name = str(scene_object.get("name", "scene_object"))
+    usd_path = str(scene_object.get("usd_path", ""))
+    if is_missing_value(usd_path):
+        raise RuntimeError(f"scene_objects.{name}.usd_path 仍为空或 TODO，不能模板化生成 env_cfg。")
+    pose = scene_object.get("pose", {}) if isinstance(scene_object.get("pose"), dict) else {}
+    pos = pose.get("pos", [0.0, 0.0, 0.0])
+    quat = pose.get("quat_xyzw", [0.0, 0.0, 0.0, 1.0])
+    scale = scene_object.get("scale")
+    mass = scene_object.get("mass", 0.05)
+    single_rigid_body = bool(scene_object.get("single_rigid_body"))
+    prim_suffix = "".join(part[:1].upper() + part[1:] for part in name.split("_") if part) or "SceneObject"
+    lines = [
+        f"        self.scene.{name} = RigidObjectCfg(",
+        f'            prim_path="{{ENV_REGEX_NS}}/SceneObjects/{prim_suffix}",',
+        f"            init_state=RigidObjectCfg.InitialStateCfg(pos={tuple(pos)!r}, rot={tuple(quat)!r}),",
+    ]
+    if single_rigid_body:
+        lines.extend(
+            [
+                "            spawn=SingleRigidBodyUsdFileCfg(",
+                f"                usd_path={python_asset_expr(usd_path)},",
+                f"                scale={tuple(scale)!r}," if scale else "                scale=None,",
+                "                rigid_props=PhysxRigidBodyPropertiesCfg(),",
+                f"                mass_props=MassPropertiesCfg(mass={float(mass)!r}),",
+                "            ),",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "            spawn=UsdFileCfg(",
+                f"                usd_path={python_asset_expr(usd_path)},",
+                f"                scale={tuple(scale)!r}," if scale else "",
+                "            ),",
+            ]
+        )
+    lines.append("        )")
+    return [line for line in lines if line]
+
+
 def auto_env_class_name(spec: dict[str, Any]) -> str:
     """Build a deterministic AutoPickPlace...EnvCfg class name from task.gym_id."""
     gym_id = str(spec.get("task", {}).get("gym_id", "Isaac-Auto-PickPlace-Task-Teleop-v0"))
@@ -95,6 +143,15 @@ def robot_preset_for_spec(spec: dict[str, Any]) -> dict[str, Any]:
     presets = load_skill_presets()
     robot = presets.get("robots", {}).get(robot_preset, {})
     return robot if isinstance(robot, dict) else {}
+
+
+def output_paths_for_spec(spec: dict[str, Any]) -> dict[str, str]:
+    """Return generator output paths configured by the robot preset."""
+    robot = robot_preset_for_spec(spec)
+    default_output_dir = "source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place"
+    output_dir = str(robot.get("output_dir", default_output_dir) or default_output_dir)
+    registration_module = str(robot.get("registration_module", f"{output_dir}/__init__.py") or f"{output_dir}/__init__.py")
+    return {"output_dir": output_dir, "registration_module": registration_module}
 
 
 def read_repo_file_if_exists(path_from_repo_root: str) -> str:
@@ -284,6 +341,8 @@ def render_template_env_cfg(spec: dict[str, Any]) -> tuple[str, str]:
     object_quat = object_pose.get("quat_xyzw") if isinstance(object_pose, dict) else None
     table_pose = scene.get("table", {}).get("pose", {}) if isinstance(scene.get("table"), dict) else {}
     target_pose = target.get("pose", {}) if isinstance(target, dict) else {}
+    scene_objects = scene_objects_from_spec(spec)
+    needs_single_rigid_body = single_rigid_body or any(bool(item.get("single_rigid_body")) for item in scene_objects)
 
     lines = [
         "# Copyright (c) 2022-2026, The Isaac Lab Project Developers.",
@@ -298,7 +357,14 @@ def render_template_env_cfg(spec: dict[str, Any]) -> tuple[str, str]:
         "",
         "from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR",
     ]
-    if single_rigid_body:
+    if scene_objects:
+        lines.extend(
+            [
+                "from isaaclab.assets import RigidObjectCfg",
+                "from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg",
+            ]
+        )
+    if needs_single_rigid_body:
         lines.extend(
             [
                 "from isaaclab_physx.sim.schemas import PhysxRigidBodyPropertiesCfg",
@@ -306,7 +372,7 @@ def render_template_env_cfg(spec: dict[str, Any]) -> tuple[str, str]:
             ]
         )
     lines.extend(["", f"from .{template['module']} import {template['class']}"])
-    if single_rigid_body:
+    if needs_single_rigid_body:
         lines.append("from .pickplace_seres_r11_env_cfg import SingleRigidBodyUsdFileCfg")
     lines.extend(
         [
@@ -346,14 +412,19 @@ def render_template_env_cfg(spec: dict[str, Any]) -> tuple[str, str]:
         lines.append(f"        self.scene.packing_table.init_state.rot = {tuple(table_pose['quat_xyzw'])!r}")
     if isinstance(target_pose, dict) and target_pose.get("pos"):
         lines.append(f"        self.target_pose = {target_pose!r}")
+    if scene_objects:
+        lines.extend(["", "        # Additional scene objects are props/distractors; success still uses self.scene.object."])
+        for scene_object in scene_objects:
+            lines.extend(render_scene_object_cfg_lines(scene_object))
     lines.append("")
     return file_stem, "\n".join(lines)
 
 
-def render_registered_init(spec: dict[str, Any], module_name: str, class_name: str) -> str:
+def render_registered_init(
+    spec: dict[str, Any], module_name: str, class_name: str, registration_module: str
+) -> str:
     """Render pick_place __init__.py with an appended auto-generated gym registration."""
-    init_rel_path = "source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place/__init__.py"
-    init_abs_path = abs_from_repo_root(init_rel_path)
+    init_abs_path = abs_from_repo_root(registration_module)
     content = read_text(init_abs_path)
     gym_id = str(spec.get("task", {}).get("gym_id"))
     if gym_id in content:
@@ -378,10 +449,13 @@ def run_template_generator_workflow(spec: dict[str, Any]) -> dict[str, Any]:
     """Generate env_cfg and registration deterministically for repository presets."""
     file_stem, env_cfg_content = render_template_env_cfg(spec)
     class_name = auto_env_class_name(spec)
-    output_dir = "source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place"
+    paths = output_paths_for_spec(spec)
+    output_dir = paths["output_dir"]
     env_cfg_path = f"{output_dir}/{file_stem}.py"
-    init_path = f"{output_dir}/__init__.py"
-    init_content = render_registered_init(spec, module_name=file_stem, class_name=class_name)
+    init_path = paths["registration_module"]
+    init_content = render_registered_init(
+        spec, module_name=file_stem, class_name=class_name, registration_module=init_path
+    )
     return {
         "files": [
             {"path": env_cfg_path, "content": env_cfg_content},
@@ -554,6 +628,8 @@ def render_g1_motion_controller_adapted_env_cfg(
     object_pose = obj.get("pose", {})
     table_pose = scene.get("table", {}).get("pose", {}) if isinstance(scene.get("table"), dict) else {}
     target_pose = target.get("pose", {}) if isinstance(target, dict) else {}
+    scene_objects = scene_objects_from_spec(spec)
+    needs_single_rigid_body = single_rigid_body or any(bool(item.get("single_rigid_body")) for item in scene_objects)
 
     lines = [
         "# Copyright (c) 2022-2026, The Isaac Lab Project Developers.",
@@ -568,7 +644,14 @@ def render_g1_motion_controller_adapted_env_cfg(
         "",
         "from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR",
     ]
-    if single_rigid_body:
+    if scene_objects:
+        lines.extend(
+            [
+                "from isaaclab.assets import RigidObjectCfg",
+                "from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg",
+            ]
+        )
+    if needs_single_rigid_body:
         lines.extend(
             [
                 "from isaaclab_physx.sim.schemas import PhysxRigidBodyPropertiesCfg",
@@ -581,7 +664,7 @@ def render_g1_motion_controller_adapted_env_cfg(
             "from .pickplace_unitree_g1_inspire_hand_env_cfg import PickPlaceG1InspireFTPEnvCfg",
         ]
     )
-    if single_rigid_body:
+    if needs_single_rigid_body:
         lines.append("from .pickplace_seres_r11_env_cfg import SingleRigidBodyUsdFileCfg")
     lines.extend(
         [
@@ -749,6 +832,10 @@ def render_g1_motion_controller_adapted_env_cfg(
         lines.append(f"        self.scene.packing_table.init_state.rot = {tuple(table_pose['quat_xyzw'])!r}")
     if isinstance(target_pose, dict) and target_pose.get("pos"):
         lines.append(f"        self.target_pose = {target_pose!r}")
+    if scene_objects:
+        lines.extend(["", "        # Additional scene objects are props/distractors; success still uses self.scene.object."])
+        for scene_object in scene_objects:
+            lines.extend(render_scene_object_cfg_lines(scene_object))
     lines.extend(
         [
             "",
@@ -803,7 +890,8 @@ def run_adaptation_generator_workflow(
     )
     class_name = auto_env_class_name(spec)
     file_stem = str(spec.get("task", {}).get("generated_file_stem"))
-    output_dir = "source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_place"
+    paths = output_paths_for_spec(spec)
+    output_dir = paths["output_dir"]
     env_cfg_path = f"{output_dir}/{file_stem}.py"
 
     sys.stderr.write("[Stage B] Adaptation Generator: exact template 缺失，正在调用模型生成 adaptation_spec...\n")
@@ -864,8 +952,10 @@ def run_adaptation_generator_workflow(
     file_stem, env_cfg_content = render_g1_motion_controller_adapted_env_cfg(spec, adaptation_spec)
     env_cfg_path = f"{output_dir}/{file_stem}.py"
 
-    init_path = f"{output_dir}/__init__.py"
-    init_content = render_registered_init(spec, module_name=file_stem, class_name=class_name)
+    init_path = paths["registration_module"]
+    init_content = render_registered_init(
+        spec, module_name=file_stem, class_name=class_name, registration_module=init_path
+    )
     return {
         "files": [
             {"path": env_cfg_path, "content": env_cfg_content},

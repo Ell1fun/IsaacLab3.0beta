@@ -27,6 +27,7 @@
       <a href="./preset_enrichment.html">Preset Enrichment</a>
       <a class="active" href="./skill_files.html">Skill 文件</a>
       <a href="./presets_prompts.html">Presets & Prompts</a>
+      <a href="./dev_log.html">开发日志</a>
       <a href="./roadmap.html">落地路线</a>
     </nav>
 
@@ -50,8 +51,12 @@
           <tbody>
             <tr><td><code>env_cfg_skills/schemas/pick_place_vr_spec.schema.yml</code></td><td>PickPlaceVRSpec 的结构约束，负责字段、类型、必填/可选和条件必填。</td></tr>
             <tr><td><code>env_cfg_skills/presets/robot_presets.yml</code></td><td>仓库内机器人 preset 的确定事实：EEF、base link、IK joints、hand joints、参考 env_cfg、输出目录。</td></tr>
-            <tr><td><code>env_cfg_skills/presets/object_presets.yml</code></td><td>仓库内物体 preset 的确定事实：USD 路径、默认 pose、scale、target pose。</td></tr>
+            <tr><td><code>env_cfg_skills/presets/object_presets.yml</code></td><td>仓库内物体 preset 的确定事实：USD 路径、scale、mass、single_rigid_body、默认朝向。</td></tr>
+            <tr><td><code>env_cfg_skills/presets/placement_presets.yml</code></td><td>语义摆放 preset：把 near_left_hand / near_right_hand / table_back 等语义位置转成桌面相对 offset。</td></tr>
+            <tr><td><code>env_cfg_skills/prompts/pick_place_vr_clarification_resolver.md</code></td><td>多轮澄清 prompt：让 API 把用户最新回答和上一轮 draft_intent 合并成结构化 intent patch。</td></tr>
             <tr><td><code>env_cfg_skills/prompts/pick_place_vr_spec_builder.md</code></td><td>Spec Builder prompt：规定自然语言如何补齐成 spec。</td></tr>
+            <tr><td><code>env_cfg_skills/clarification_resolver.py</code></td><td>多轮澄清 resolver：维护 draft intent，处理删除/替换/选择主物体，并在进入 spec 前做安全 gate。</td></tr>
+            <tr><td><code>env_cfg_skills/object_intent.py</code></td><td>Object catalog 辅助：读取 object presets，生成推荐列表，并提供物体意图分析辅助函数。</td></tr>
             <tr><td><code>env_cfg_skills/prompts/pick_place_vr_generator.md</code></td><td>Generator prompt：规定通过校验的 spec 如何生成 env_cfg 和注册任务。</td></tr>
             <tr><td><code>env_cfg_skills/checklists/post_generation_validation.md</code></td><td>生成后验收清单，检查路径、import、joint/link、action layout、注册。</td></tr>
             <tr><td><code>env_cfg_skills/examples/...</code></td><td>R11 / G1 示例 spec，用于验证 schema 表达能力并给模型参考。</td></tr>
@@ -81,12 +86,16 @@
         <h2>一个 skill 应该包含什么</h2>
         <pre><code>env_cfg_skills/
   orchestrator.py
+  clarification_resolver.py
+  object_intent.py
   schemas/
     pick_place_vr_spec.schema.yml
   presets/
     robot_presets.yml
     object_presets.yml
+    placement_presets.yml
   prompts/
+    pick_place_vr_clarification_resolver.md
     pick_place_vr_spec_builder.md
     pick_place_vr_generator.md
   checklists/
